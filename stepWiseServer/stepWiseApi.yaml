@@ -1,0 +1,592 @@
+openapi: 3.0.0
+info:
+  title: Your API Title
+  version: 1.0.0
+  description: Your API Description
+paths:
+  /toolbox:
+    get:
+      summary: Retrieve toolbox items.
+      operationId: getToolbox
+      tags:
+        - General
+      parameters:
+        - name: tutorial_id
+          in: query
+          description: ID of the tutorial to retrieve materials for
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Tool'
+  /materials:
+    get:
+      summary: Retrieve materials for a tutorial.
+      operationId: getMaterials
+      tags:
+        - General
+      parameters:
+        - name: tutorial_id
+          in: query
+          description: ID of the tutorial to retrieve materials for
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Material'
+
+  /tutorial:
+    get:
+      summary: Retrieve tutorial details.
+      operationId: getTutorial
+      tags:
+        - General
+      parameters:
+        - name: tutorial_id
+          in: query
+          description: ID of the tutorial to retrieve details for
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tutorial'
+
+  /user:
+    get:
+      summary: Retrieve user details.
+      operationId: getUser
+      tags:
+        - General
+      parameters:
+        - name: user_id
+          in: query
+          description: ID of the user to retrieve details for
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+
+  /user/browser_history:
+    get:
+      summary: Retrieve user's browser history.
+      operationId: getUserBrowser
+      tags:
+        - General
+      parameters:
+        - name: user_id
+          in: query
+          description: ID of the user to retrieve browser history for
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WatchHistory'
+
+  /user/watch_history:
+    get:
+      summary: Retrieve user's watch history.
+      operationId: getUserHistory
+      tags:
+        - General
+      parameters:
+        - name: user_id
+          in: query
+          description: ID of the user to retrieve watch history for
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WatchHistory'
+
+  /user/favourite_list:
+    get:
+      summary: Retrieve user's favorite tutorials.
+      operationId: getUserFavouriteList
+      tags:
+        - General
+      parameters:
+        - name: user_id
+          in: query
+          description: ID of the user to retrieve favorite tutorials for
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/FavouriteList'
+
+  /user/search_history:
+    get:
+      summary: Retrieve user's search history.
+      operationId: getUserSearchHistory
+      tags:
+        - General
+      parameters:
+        - name: user_id
+          in: query
+          description: ID of the user to retrieve search history for
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SearchHistory'
+
+  /tutorial/tutorial_comment:
+    get:
+      summary: Retrieve comments for a tutorial.
+      operationId: getTutorialComment
+      tags:
+        - General
+      parameters:
+        - name: tutorial_id
+          in: query
+          description: ID of the tutorial to retrieve comments for
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserComment'
+
+  /add_to_history:
+    post:
+      summary: Add tutorial to user's watch history.
+      operationId: addToHistory
+      tags:
+        - Add
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                user_id:
+                  type: string
+                  format: uuid
+                tutorial_id:
+                  type: string
+                  format: uuid
+              required:
+                - user_id
+                - tutorial_id
+      responses:
+        '200':
+          description: Successful operation
+
+  /add_favourite:
+    post:
+      summary: Add tutorial to user's favorites.
+      operationId: addFavourite
+      tags:
+        - Add
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                user_id:
+                  type: string
+                  format: uuid
+                tutorial_id:
+                  type: string
+                  format: uuid
+              required:
+                - user_id
+                - tutorial_id
+      responses:
+        '200':
+          description: Successful operation
+
+  /delete_user:
+    delete:
+      summary: Delete user.
+      operationId: deleteUser
+      tags:
+        - Delete
+      parameters:
+        - name: user_id
+          in: query
+          description: ID of the user to delete
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Successful operation
+
+  /delete_favourite:
+    delete:
+      summary: Remove tutorial from user's favorites.
+      operationId: deleteFavourite
+      tags:
+        - Delete
+      parameters:
+        - name: user_id
+          in: query
+          description: ID of the user to remove tutorial from favorites for
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: tutorial_id
+          in: query
+          description: ID of the tutorial to remove from favorites
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Successful operation
+
+  /delete_history:
+    delete:
+      summary: Remove tutorial from user's watch history.
+      operationId: deleteHistory
+      tags:
+        - Delete
+      parameters:
+        - name: user_id
+          in: query
+          description: ID of the user
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Successful operation
+
+  /search_result_list:
+    get:
+      summary: Retrieve search result list.
+      operationId: getSearchResultList
+      tags:
+        - General
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+                  format: uuid
+
+  /browser_list:
+    get:
+      summary: Retrieve browser list.
+      operationId: getBrowserList
+      tags:
+        - General
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+                  format: uuid
+
+components:
+  schemas:
+
+    # User table
+    User:
+      type: object
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        firstname:
+          type: string
+        lastname:
+          type: string
+        email:
+          type: string
+          format: email
+        creator:
+          type: boolean
+        password_hash:
+          type: string
+      required:
+        - user_id
+        - firstname
+        - lastname
+        - email
+
+    # Tutorials table
+    Tutorial:
+      type: object
+      properties:
+        tutorial_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+        tutorial_kind:
+          type: string
+        user_id:
+          type: string
+          format: uuid
+        time:
+          type: string
+          format: date-time
+        difficulty:
+          type: string
+        complete:
+          type: boolean
+        description:
+          type: string
+        preview_picture_link:
+          type: string
+          format: uri
+        preview_type:
+          type: string
+        views:
+          type: integer
+        steps:
+          type: integer
+      required:
+        - tutorial_id
+        - title
+        - user_id
+
+    # Materials table
+    Material:
+      type: object
+      properties:
+        material_id:
+          type: string
+          format: uuid
+        tutorial_id:
+          type: string
+          format: uuid
+        mat_title:
+          type: string
+        mat_amount:
+          type: integer
+        link:
+          type: string
+          format: uri
+      required:
+        - material_id
+        - tutorial_id
+        - mat_title
+
+    # Tools table
+    Tool:
+      type: object
+      properties:
+        tool_id:
+          type: string
+          format: uuid
+        tutorial_id:
+          type: string
+          format: uuid
+        tool_title:
+          type: string
+        tool_amount:
+          type: integer
+        link:
+          type: string
+          format: uri
+      required:
+        - tool_id
+        - tutorial_id
+        - tool_title
+        # Steps table
+    Step:
+      type: object
+      properties:
+        step_id:
+          type: string
+          format: uuid
+        tutorial_id:
+          type: string
+          format: uuid
+        title:
+          type: string
+      required:
+        - step_id
+        - tutorial_id
+
+    # SubStepsList table
+    SubStepsList:
+      type: object
+      properties:
+        sub_step_list_id:
+          type: string
+          format: uuid
+        sub_step_id:
+          type: string
+          format: uuid
+        step_id:
+          type: string
+          format: uuid
+      required:
+        - sub_step_list_id
+        - sub_step_id
+        - step_id
+
+    # UserComments table
+    UserComment:
+      type: object
+      properties:
+        comment_id:
+          type: string
+          format: uuid
+        step_id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        text:
+          type: string
+      required:
+        - comment_id
+        - step_id
+        - user_id
+        - text
+
+    # Watch_History table
+    WatchHistory:
+      type: object
+      properties:
+        history_id:
+          type: string
+          format: uuid
+        tutorial_id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        last_watched_time:
+          type: string
+          format: date-time
+        completed_steps:
+          type: integer
+      required:
+        - history_id
+        - tutorial_id
+        - user_id
+
+    # FavouriteList table
+    FavouriteList:
+      type: object
+      properties:
+        fav_id:
+          type: string
+          format: uuid
+        tutorial_id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        date_time:
+          type: string
+          format: date-time
+      required:
+        - fav_id
+        - tutorial_id
+        - user_id
+
+    # Search_History table
+    SearchHistory:
+      type: object
+      properties:
+        search_id:
+          type: string
+          format: uuid
+        user_id:
+          type: string
+          format: uuid
+        searched_text:
+          type: string
+      required:
+        - search_id
+        - user_id
+        - searched_text
+
+    # TutorialRating table
+    TutorialRating:
+      type: object
+     
+
