@@ -1,0 +1,75 @@
+{
+  "id": "1E2DFA89-496A-47FD-9941-DF1FC4E6484A",
+  "title": "How to Start with Woodworking",
+  "tutorialKind": "DIY",
+  "userId": "550E8400-E29B-41D4-A716-446655440000",
+  "time": 60,
+  "difficulty": 2,
+  "completed": false,
+  "description": "A beginner's guide to starting with woodworking.",
+  "previewPictureLink": "https://example.com/image.jpg",
+  "previewType": "Image",
+  "views": 150,
+  "steps": [
+    {
+      "id": "2F3E4A89-123B-45CD-6789-EF1FC4E6484B",
+      "title": "Preparing the Wood",
+      "subStepList": [
+        {
+          "id": "6H7J8K90-4445-67GH-8888-9DAEBF0EC3C",
+          "type": 1,
+          "content": {
+            "text": {
+              "id": "8I9J0K11-5556-78IJ-9999-AEBFC0FD4D",
+              "contentText": "Measure and cut the wood planks to the required sizes."
+            }
+          }
+        },
+        {
+          "id": "8I9J0K11-5556-78IJ-9999-AEBFC0FD4D",
+          "type": 2,
+          "content": {
+            "picture": {
+              "id": "9K0L1M23-7778-90LM-BBBB-C1HD2IE6F",
+              "pictureLink": "https://example.com/steps/cutting.jpg"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "tools": [
+    {
+      "id": "5F6G7H80-3334-56EF-7777-8C9DAF0EBC2B",
+      "title": "Hammer",
+      "amount": 1,
+      "link": "https://example.com/tools/hammer"
+    }
+  ],
+  "materials": [
+    {
+      "id": "4E5F6A70-1112-43CD-2222-7B8C9D0EBC1A",
+      "title": "Wood Planks",
+      "amount": 5,
+      "link": "https://example.com/materials/wood-planks"
+    }
+  ],
+  "ratings": [
+    {
+      "id": "7G8H9I12-6667-89JK-AAAA-BFCG1HD5E",
+      "tutorialID": "1E2DFA89-496A-47FD-9941-DF1FC4E6484A",
+      "userID": "8L9M0N45-8889-Q1MN-CCCC-D2IE3JF7G",
+      "rating": 5
+    }
+  ],
+  "userComments": [
+    {
+      "id": "9K0L1M23-7778-90LM-BBBB-C1HD2IE6F",
+      "stepID": "2F3E4A89-123B-45CD-6789-EF1FC4E6484B",
+      "user": {
+        "id": "8L9M0N45-8889-Q1MN-CCCC-D2IE3JF7G"
+      },
+      "text": "This was really helpful, thanks!"
+    }
+  ]
+}
