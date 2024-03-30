@@ -12,6 +12,7 @@ CREATE TABLE Material (
     tutorial_id uuid REFERENCES Tutorials(tutorial_id),
     mat_title varchar(20),
     mat_amount integer,
+    mat_price float,
     link varchar(300)
 );
 
