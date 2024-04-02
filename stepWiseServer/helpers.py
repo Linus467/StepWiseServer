@@ -50,7 +50,7 @@ def fetch_and_format_tools(cur, tutorial_id):
   tool_records = cur.fetchall()
   return [
       {
-          "id": str(tool_record["id"]),  # Convert UUID to string if necessary
+          "id": str(tool_record["id"]),
           "title": tool_record["title"],
           "amount": tool_record["amount"],
           "link": tool_record["link"]

@@ -1,13 +1,15 @@
 from flasgger import Swagger
-from flask import Flask, jsonify, request, abort
+from flask import Flask, jsonify, request, abort, g
 import boto3
 import psycopg2
 from psycopg2.extras import RealDictCursor
+from functools import wraps
 import pdb
-import helpers
+from helpers import (fetch_and_format_materials, fetch_and_format_tools, 
+                     fetch_and_format_steps, fetch_and_format_ratings, fetch_and_format_user)
 
-#DB Connection
-
+from werkzeug.security import check_password_hash, generate_password_hash
+import uuid
 
 app = Flask(__name__)
 
@@ -28,178 +30,70 @@ def hello_world():
 if __name__ == "__main__":
     app.run(host="127.0.0.1", debug=True)
 
-@app.route("/api/comment", methods=["GET"])
-def get_comment():
-    comment = [
-        {
-            "id": "1E2DFA89-496A-47FD-9941-DF1FC4E6484A",
-            "stepID": "D81EC5BD-9D67-4F8C-81F2-DBD5AFDDB5F2",
-            "text": "This is a comment text.",
-            "user": {
-                "email": "john.doe@example.com",
-                "firstName": "John",
-                "id": "550E8400-E29B-41D4-A716-446655440000",
-                "isCreator": True,
-                "lastName": "Doe",
-                "passwordHash": "hashedpassword"
-            }
-        },
-        {
-            "id": "2F3E4A89-123B-45CD-6789-EF1FC4E6484A",
-            "stepID": "12e1ca18-1f83-4391-bdb4-b07f55045ceb",
-            "text": "Another comment text here.",
-            "user": {
-                "email": "jane.smith@example.com",
-                "firstName": "Jane",
-                "id": "6e384109-11e9-4c68-ab03-da3393f9e08c",
-                "isCreator": False,
-                "lastName": "Smith",
-                "passwordHash": "differenthashedpassword"
-            }
-        }
-    ]
+DB_NAME = "StepWiseServer"
+DB_USER = "postgres"
+DB_PASS = "your_password"
+DB_HOST = "127.0.0.1"
+DB_PORT = "5432"
 
-    return jsonify(comment)
-
-@app.route("/api/tutorial", methods=["GET"])
-def get_tutorial():
-    tutorial_data = [
-        {
-            "id": "1E2DFA89-496A-47FD-9941-DF1FC4E6484A",
-            "title": "Woodworking Basics",
-            "tutorialKind": "DIY",
-            "user": {
-                "id": "550E8400-E29B-41D4-A716-446655440000",
-                "firstName": "Alex",
-                "lastName": "Johnson",
-                "email": "alex.johnson@example.com",
-                "isCreator": True
-            },
-            "time": 3600,
-            "difficulty": 2,
-            "completed": False,
-            "description": "Learn the basics of woodworking, from selecting wood to cutting and finishing.",
-            "previewPictureLink": "https://example.com/images/woodworking.jpg",
-            "previewType": "Image",
-            "views": 120,
-            "steps": [
-                {
-                    "id": "2F3E4A89-123B-45CD-6789-EF1FC4E6484B",
-                    "title": "Selecting Your Wood",
-                    "subStepList": [
-                        {
-                            "id": "ef19622b-29ca-48ac-a81c-8ac701c5c466",
-                            "type": 1,
-                            "content": {
-                                "text": {
-                                    "id": "f5617f3a-472c-45cf-9adb-4ed11c9cc22f",
-                                    "contentText": "Learn how to select the right type of wood for your project."
-                                }
-                            }
-                        },
-                        {
-                            "id": "4c6a9b0f-d6b7-47ee-8a2d-261915118828",
-                            "type": 2,
-                            "content": {
-                                "picture": {
-                                    "id": "e5b0012d-c873-4858-b710-9b932d874356",
-                                    "pictureLink": "https://example.com/images/selecting-wood.jpg"
-                                }
-                            }
-                        }
-                    ],
-                    "userComments": [
-                        {
-                            "id": "d43e34b3-877c-4d2b-989b-98739a2323f1",
-                            "user": {
-                                "id": "928cda31-39e1-4ae5-8dc2-4e0215864575",
-                                "firstName": "John",
-                                "lastName": "Doe",
-                                "email": "john.doe@example.com",
-                                "isCreator": True
-                            },
-                            "text": "Thanks, this helped a lot with my project!"
-                        }
-                    ]
-                },
-                {
-                    "id": "2F3E4A89-123B-45CD-6789-EF1FC4E6484C",
-                    "title": "Cutting Techniques",
-                    "subStepList": [
-                        {
-                            "id": "3c4d9b0f-d6b7-47ee-8a2d-261915118829",
-                            "type": 1,
-                            "content": {
-                                "text": {
-                                    "id": "e6a1f3a2-472c-45cf-9adb-4ed11c9cc230",
-                                    "contentText": "Learn different cutting techniques for woodworking."
-                                }
-                            }
-                        }
-                    ],
-                    "userComments": [ 
-                        {
-                            "id": "d43e34b3-877c-4d2b-989b-98739a2323f2",
-                            "user": {
-                                "id": "928cda31-39e1-4ae5-8dc2-4e0215864576",
-                                "firstName": "Sarah",
-                                "lastName": "Johnson",
-                                "email": "sarah.johnson@example.com",
-                                "isCreator": True
-                            },
-                            "text": "This tutorial really expanded my woodworking skills!"
-                        }
-                    ]
-                }
-            ],
-            "tools": [
-                {
-                    "id": "263586bf-9302-4430-ad93-b138c5173e42",
-                    "title": "Saw",
-                    "amount": 1,
-                    "link": "https://example.com/tools/saw"
-                }
-            ],
-            "materials": [
-                {
-                    "id": "4E5F6A70-1112-43CD-2222-7B8C9D0EBC1A",
-                    "title": "Pine Wood",
-                    "amount": 3,
-                    "price": 10.99,
-                    "link": "https://example.com/materials/pine-wood"
-                }
-            ],
-            "ratings": [
-                {
-                    "id": "355c8bd0-8e82-451e-ab07-d8fffc6e1205",
-                    "user": {
-                        "id": "f96b9369-c6e7-45d3-9020-b65a65d8765a",
-                        "firstName": "Jane",
-                        "lastName": "Doe",
-                        "email": "jane.doe@example.com",
-                        "isCreator": False
-                    },
-                    "rating": 5,
-                    "text": "Very informative and easy to follow."
-                }
-            ]
-        }
-    ]
-
-    return jsonify(tutorial_data)
-
-@app.route("/api/tutorial/id/", methods=["GET"])
-def get_tutorial_data():
+def get_db_connection():
     conn = psycopg2.connect(
-        dbname="StepWiseServer",
-        user="postgres",
-        password="Gierath-02",  # Use your actual password
-        host="127.0.0.1",
-        port="5432",
-        cursor_factory=RealDictCursor
-    )
+        dbname=DB_NAME,
+        user=DB_USER,
+        password=DB_PASS,
+        host=DB_HOST,
+        port=DB_PORT,
+        cursor_factory=RealDictCursor)
+    return conn
+
+def authenticate(user_id, session_key):
+    conn = get_db_connection()
     cur = conn.cursor()
-    tutorial_id = request.args.get('tutorial_id')
+    cur.execute("SELECT * FROM \"User\" WHERE user_id = %s AND session_key = %s", (user_id, session_key))
+    user = cur.fetchone()
+    cur.close()
+    conn.close()
+    return bool(user)
+
+#Decorators
+def require_auth(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        # Assuming you're sending `UserId` and `sessionKey` as headers.
+        user_id = request.headers.get('UserId')
+        session_key = request.headers.get('SessionKey')
+
+        # Performs authentication check
+        if not user_id or not session_key or not authenticate(user_id, session_key):
+            # If authentication fails, return an appropriate response
+            return jsonify({"error": "Authentication failed"}), 401
+
+        # Authentication passed, call the actual view function
+        return f(*args, **kwargs)
+    return decorated_function
+
+def require_isCreator(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        user_id = request.headers.get('UserId')
+        # Check if the user is a creator
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT creator FROM \"User\" WHERE user_id = %s", (user_id,))
+        user = cur.fetchone()
+        if not user or not user['creator']:
+            return jsonify({"error": "User is not a creator"}), 403
+        cur.close()
+        conn.close()
+        return f(*args, **kwargs)
+    return decorated_function
+
+#API Endpoints
+@app.route("/api/tutorial/id/", methods=["GET"])
+def get_tutorial():
+    conn = get_db_connection()
+    cur = conn.cursor()
+    tutorial_id = request.json.get('tutorial_id')
     if not tutorial_id:
         return jsonify({"error": "Missing tutorial_id parameter"}), 400
 
@@ -231,156 +125,16 @@ def get_tutorial_data():
         if not tutorial_data:
             return jsonify({"error": "Tutorial not found"}), 404
 
-        #fetch Materials
-        cur.execute("""
-            SELECT
-                material_id AS id,
-                mat_title AS title,
-                mat_amount AS amount,
-                mat_price AS price,
-                link
-            FROM Material
-            WHERE tutorial_id = %s
-        """, (tutorial_id,))
-        material_records = cur.fetchall()
-
-        materials = []
-        for material in material_records:
-            materials.append({
-                "id": material["id"],
-                "title": material["title"],
-                "amount": material["amount"],
-                "link": material["link"],
-                "price": material["price"]
-            })
-
+        # Fetching Extra Data
+        # Fetch Materials
+        materials = fetch_and_format_materials(cur, tutorial_id)
         # Fetch Tools
-        cur.execute("""
-            SELECT tool_id AS id, tool_title AS title, tool_amount AS amount, link
-            FROM Tools
-            WHERE tutorial_id = %s
-        """, (tutorial_id,))
-        tool_records = cur.fetchall()
-
-        # Transform the tools to match the JSON structure
-        tools = [
-            {
-                "id": str(tool_record["id"]),  # Convert UUID to string
-                "title": tool_record["title"],
-                "amount": tool_record["amount"],
-                "link": tool_record["link"]
-            }
-            for tool_record in tool_records
-        ]
-
-        # Initialize an empty list for steps
-        steps = []
-
-        # Fetch Step IDs and titles
-        cur.execute("""
-            SELECT step_id, title
-            FROM Steps
-            WHERE tutorial_id = %s
-        """, (tutorial_id,))
-        step_records = cur.fetchall()
-
-        for step_record in step_records:
-            cur.execute("""
-                SELECT ssl.sub_step_id, ss.content_type, ss.content_id
-                FROM SubStepsList ssl
-                INNER JOIN SubSteps ss ON ssl.sub_step_id = ss.sub_step_id
-                WHERE ssl.step_id = %s
-            """, (step_record['step_id'],))
-            sub_steps = cur.fetchall()
-
-            adjusted_sub_steps = []
-            for sub_step in sub_steps:
-                content = None
-                if sub_step['content_type'] == 1:
-                    cur.execute("SELECT id, content_text FROM TextContent WHERE id = %s", (sub_step['content_id'],))
-                    content_data = cur.fetchone()
-                    if content_data:
-                        content = {"text": {"id": content_data['id'], "contentText": content_data['content_text']}}
-                elif sub_step['content_type'] == 2:
-                    cur.execute("SELECT id, content_picture_link AS pictureLink FROM PictureContent WHERE id = %s", (sub_step['content_id'],))
-                    content_data = cur.fetchone()
-                    if content_data:
-                        content = {"picture": {"id": content_data['id'], "pictureLink": content_data['pictureLink']}}
-                elif sub_step['content_type'] == 3:  # Handling VideoContent
-                    cur.execute("SELECT id, content_video_link AS videoLink FROM VideoContent WHERE id = %s", (sub_step['content_id'],))
-                    content_data = cur.fetchone()
-                    if content_data:
-                        content = {"video": {"id": content_data['id'], "videoLink": content_data['videoLink']}}
-
-                adjusted_sub_steps.append({
-                    "id": sub_step['sub_step_id'],
-                    "type": sub_step['content_type'],
-                    "content": content
-                })
-
-            # Fetch user comments for each step (if applicable)
-            cur.execute("""
-                SELECT uc.comment_id AS id, uc.text, 
-                    u.user_id AS "id", u.firstname AS "firstName", 
-                    u.lastname AS "lastName", u.email, u.creator AS "isCreator"
-                FROM UserComments uc
-                INNER JOIN "User" u ON uc.user_id = u.user_id
-                WHERE uc.step_id = %s
-            """, (step_record['step_id'],))
-            user_comments = cur.fetchall()
-
-            # Adjust user_comments as needed to match the expected structure
-            formatted_comments = [{
-                "id": comment['id'],
-                "user": {
-                    "id": comment['id'],  # This seems to be a mistake; ensure correct ID fields are used
-                    "firstName": comment['firstName'],
-                    "lastName": comment['lastName'],
-                    "email": comment['email'],
-                    "isCreator": comment['isCreator']
-                },
-                "text": comment['text']
-            } for comment in user_comments]
-
-            steps.append({
-                "id": step_record['step_id'],
-                "title": step_record['title'],
-                "subStepList": adjusted_sub_steps,
-                "userComments": formatted_comments  # Include this only if you're fetching comments
-            })
-
-        # Improved Fetch Ratings with nested User Details
-        cur.execute("""
-            SELECT
-                r.rating_id AS id,
-                r.rating,
-                r.text,
-                usr.user_id AS "userId",
-                usr.firstname AS "firstName",
-                usr.lastname AS "lastName",
-                usr.email,
-                usr.creator AS creator
-            FROM TutorialRating r
-            INNER JOIN "User" usr ON r.user_id = usr.user_id
-            WHERE r.tutorial_id = %s
-        """, (tutorial_id,))
-        ratings_raw = cur.fetchall()
-
-        ratings = [{
-            "id": rating["id"],
-            "user": {
-                "id": rating["userId"],
-                "firstName": rating["firstName"],
-                "lastName": rating["lastName"],
-                "email": rating["email"],
-                "isCreator": rating["creator"]
-            },
-            "rating": rating["rating"],
-            "text": rating["text"]
-        } for rating in ratings_raw]
-
-        tutorial_data['ratings'] = ratings
-
+        tools = fetch_and_format_tools(cur, tutorial_id)
+        # Fetch Steps
+        steps = fetch_and_format_steps(cur, tutorial_id)
+        # Fetch Ratings
+        ratings = fetch_and_format_ratings(cur, tutorial_id)
+        
         # Construct the final tutorial_data dictionary with all related data included
         tutorial_data = {
             "id": tutorial_data["tutorial_id"],
@@ -411,3 +165,687 @@ def get_tutorial_data():
         conn.close()
 
     return jsonify([tutorial_data])
+
+@app.route("/api/tutorial_kind", methods=["GET"])
+def get_tutorials():
+    conn = get_db_connection()
+    cur = conn.cursor()
+    tutorial_kind = request.args.get('tutorial_kind')  # Use a different parameter to fetch multiple tutorials based on criteria
+    tutorials_data = []
+
+    try:
+        if tutorial_kind:
+            # Fetch tutorials based on the tutorial_kind parameter
+            cur.execute("""
+                SELECT
+                    t.tutorial_id,
+                    t.title,
+                    t.tutorial_kind,
+                    u.user_id,
+                    u.firstname,
+                    u.lastname,
+                    u.email,
+                    u.creator,
+                    t.time,
+                    t.difficulty,
+                    t.complete,
+                    t.description,
+                    t.preview_picture_link,
+                    t.preview_type,
+                    t.views,
+                    t.steps
+                FROM Tutorials t
+                INNER JOIN "User" u ON t.user_id = u.user_id
+                WHERE t.tutorial_kind = %s
+            """, (tutorial_kind,))
+        else:
+            return jsonify({"error": "Tutorial kind not received"}), 404
+        
+        for tutorial_data in cur.fetchall():
+            # For each tutorial, fetch additional data like materials, tools, steps, and ratings
+            tutorial_id = tutorial_data['tutorial_id']
+            materials = fetch_and_format_materials(cur, tutorial_id)
+            tools = fetch_and_format_tools(cur, tutorial_id)
+            steps = fetch_and_format_steps(cur, tutorial_id)
+            ratings = fetch_and_format_ratings(cur, tutorial_id)
+            
+            # Add the fetched data to the tutorial_data dictionary
+            tutorials_data.append({
+                "id": tutorial_data["tutorial_id"],
+                "title": tutorial_data["title"],
+                "tutorialKind": tutorial_data["tutorial_kind"],
+                "user": {
+                    "id": tutorial_data["user_id"],
+                    "firstName": tutorial_data["firstname"],
+                    "lastName": tutorial_data["lastname"],
+                    "email": tutorial_data["email"],
+                    "isCreator": tutorial_data["creator"]
+                },
+                "time": tutorial_data["time"],
+                "difficulty": tutorial_data["difficulty"],
+                "completed": tutorial_data["complete"],
+                "description": tutorial_data["description"],
+                "previewPictureLink": tutorial_data["preview_picture_link"],
+                "previewType": tutorial_data["preview_type"],
+                "views": tutorial_data["views"],
+                "steps": steps,
+                "materials": materials,
+                "tools": tools,
+                "ratings": ratings
+            })
+        # Return the list of tutorials
+        if(tutorial_data.count() == 0):
+            return jsonify({"error": "No tutorials found"}), 404
+
+    # close DB connection
+    finally:
+        cur.close()
+        conn.close()
+
+    return jsonify(tutorials_data)
+
+#region Account
+@app.route("/api/change_password", methods=["POST"])
+@require_auth
+def change_password():
+    # Get the request data
+    data = request.json
+    user_id = request.user_id
+    currentPW = data.get('currentPW')
+    newPW = data.get('newPW')
+    
+    # Check if all required parameters are present
+    if not all([currentPW, newPW]):
+        return jsonify({"error": "Missing required parameters"}), 400
+
+    # Connect to the database
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    try:
+        # Fetch the user's password hash
+        cur.execute("SELECT password_hash FROM \"User\" WHERE user_id = %s", (user_id,))
+        user = cur.fetchone()
+
+        # Check if the user exists and the current password is correct
+        if user and check_password_hash(user['password_hash'], currentPW):
+            new_password_hash = generate_password_hash(newPW)
+            cur.execute("UPDATE \"User\" SET password_hash = %s WHERE user_id = %s", (new_password_hash, user_id))
+            conn.commit()
+            success = True
+        else:
+            success = False
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        success = False
+    finally:
+        cur.close()
+        conn.close()
+
+    return jsonify({"success": success}), 200 if success else 400
+
+@app.route("/api/get_session_key", methods=["POST"])
+def get_session_key():
+    # Get the request data
+    data = request.json
+    user_id = data.get('UserId')
+    email = data.get('email')
+    password = data.get('password')
+
+    if not all([user_id, email, password]):
+        return jsonify({"error": "Missing required parameters"}), 400
+
+    # Connect to the database
+    conn = get_db_connection()
+    cur = conn.cursor()
+    session_key = ""
+
+    try:
+        # Fetch the user's password hash
+        cur.execute("SELECT password_hash FROM \"User\" WHERE user_id = %s AND email = %s", (user_id, email))
+        user = cur.fetchone()
+
+        # Check if the user exists and the password is correct
+        if user and check_password_hash(user['password_hash'], password):
+            session_key = str(uuid.uuid4())
+            cur.execute("UPDATE \"User\" SET session_key = %s WHERE user_id = %s", (session_key, user_id))
+            conn.commit()
+    except Exception as e:
+        print(f"An error occurred: {e}")
+    finally:
+        cur.close()
+        conn.close()
+
+    if session_key:
+        return jsonify({"SessionKey": session_key}), 200
+    else:
+        return jsonify({"error": "Invalid credentials or user not found"}), 401
+
+@app.route("/api/create_account", methods=["POST"])
+def create_account():
+
+    # Get the request data
+    data = request.json
+    email = data.get('email')
+    password = data.get('password')
+    firstname = data.get('firstname')
+    lastname = data.get('lastname')
+
+    # Check if all required parameters are present
+    if not all([email, password, firstname, lastname]):
+        return jsonify({"error": "Missing required parameters"}), 400
+
+    # Connect to the database
+    conn = get_db_connection()
+    cur = conn.cursor()
+    success = False
+
+    try:
+        # Check if the email is already in use
+        cur.execute("SELECT email FROM \"User\" WHERE email = %s", (email,))
+        if cur.fetchone() is None:
+            password_hash = generate_password_hash(password)
+            cur.execute("INSERT INTO \"User\" (user_id, email, password_hash, firstname, lastname, creator) VALUES (UUID_GENERATE_V4(), %s, %s, %s, %s, FALSE)", (email, password_hash, firstname, lastname))
+            conn.commit()
+            success = True
+    except Exception as e:
+        print(f"An error occurred: {e}")
+    finally:
+        cur.close()
+        conn.close()
+
+    return jsonify({"success": success}), 201 if success else 400
+
+@app.route("/api/GetUser", methods=["GET"])
+@require_auth
+def get_user():
+    user_id = g.user_id
+    conn = get_db_connection()
+    cur = conn.cursor()
+    #getting the user in the correct format
+    user = fetch_and_format_user(cur, user_id)
+    cur.close()
+    conn.close()
+    return jsonify(user), 200
+
+#endregion
+
+#region History
+@app.route("/api/GetHistoryList", methods=["GET"])
+@require_auth
+def get_history_list():
+    user_id = request.args.get('UserId')
+    session_key = request.args.get('sessionKey')
+    
+    if authenticate(user_id, session_key):
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT t.* FROM Tutorials t
+            JOIN Watch_History h ON t.tutorial_id = h.tutorial_id
+            WHERE h.user_id = %s
+        """, (user_id,))
+        tutorials = cur.fetchall()
+        cur.close()
+        conn.close()
+        return jsonify(tutorials), 200
+    else:
+        return jsonify({"error": "Authentication failed"}), 401
+
+@app.route("/api/DeleteHistorySingle", methods=["DELETE"])
+@require_auth
+def delete_history_single():
+    # Get parameters from the request
+    user_id = g.user_id
+    tutorial_id = request.args.get('TutorialId')
+    
+    # DB connection
+    conn = get_db_connection()
+    cur = conn.cursor()
+    # Delete the tutorial from the user's watch history
+    cur.execute("""
+        DELETE FROM Watch_History
+        WHERE user_id = %s AND tutorial_id = %s
+    """, (user_id, tutorial_id))
+    conn.commit()
+    cur.close()
+    conn.close()
+    
+    return jsonify({"success": True}), 200
+
+@app.route("/api/DeleteHistory", methods=["DELETE"])
+@require_auth
+def delete_history():
+    # Get the user_id from require auth decorator
+    user_id = g.user_id
+    
+    # DB connection
+    conn = get_db_connection()
+    cur = conn.cursor()
+    # Delete all tutorials from the user's watch history
+    cur.execute("""
+        DELETE FROM Watch_History
+        WHERE user_id = %s
+    """, (user_id,))
+    conn.commit()
+    cur.close()
+    conn.close()
+    return jsonify({"success": True}), 200
+#endregion
+
+#region Search
+@app.route("/api/QueryString", methods=["GET"])
+def query_string():
+    query = request.args.get('Query')
+    if not query:
+        return jsonify({"error": "Query parameter is required"}), 400
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+    # Useing ILIKE for case-insensitive search and % for wildcard matching
+    search_query = f"%{query}%"
+    cur.execute("""
+        SELECT * FROM Tutorials
+        WHERE title ILIKE %s OR description ILIKE %s
+    """, (search_query, search_query))
+    tutorials = cur.fetchall()
+    cur.close()
+    conn.close()
+
+    if tutorials:
+        return jsonify(tutorials), 200
+    else:
+        return jsonify({"message": "No tutorials found matching the query"}), 404
+#endregion
+
+#region Favorites
+@app.route("/api/GetFavorite", methods=["GET"])
+@require_auth
+def get_favorite():
+    user_id = g.user_id
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT t.* FROM Tutorials t
+        JOIN FavouriteList f ON t.tutorial_id = f.tutorial_id
+        WHERE f.user_id = %s
+    """, (user_id,))
+    favorite_tutorials = cur.fetchall()
+    cur.close()
+    conn.close()
+    return jsonify(favorite_tutorials), 200
+
+@app.route("/api/RemoveFavorite", methods=["POST"])
+@require_auth
+def remove_favorite():
+    data = request.json
+    user_id = g.user_id
+    tutorial_id = data.get('TutorialId')
+    
+    if not all([user_id, tutorial_id]):
+        return jsonify({"error": "Missing required parameters"}), 400
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        DELETE FROM FavouriteList
+        WHERE user_id = %s AND tutorial_id = %s
+    """, (user_id, tutorial_id))
+    conn.commit()
+
+    if cur.rowcount:
+        success = True
+    else:
+        success = False
+
+    cur.close()
+    conn.close()
+
+    return jsonify({"success": success}), 200 if success else 404
+#endregion
+
+#region Browser
+@app.route("/api/GetBrowser", methods=["GET"])
+def get_browser():
+    user_id = request.headers.get('UserId', default=None)
+    session_key = request.headers.get('SessionKey', default=None)
+    authenticated = False
+
+    if user_id and session_key:
+        authenticated = authenticate(user_id, session_key)
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM Tutorials ORDER BY RANDOM() LIMIT 10")
+    
+    tutorials_raw = cur.fetchall()
+    tutorials_formatted = []
+
+    for tutorial in tutorials_raw:
+        tutorial_id = tutorial["tutorial_id"]
+        
+        # Fetch Materials
+        materials = fetch_and_format_materials(cur, tutorial_id)
+        # Fetch Tools
+        tools = fetch_and_format_tools(cur, tutorial_id)
+        # Fetch Steps
+        steps = fetch_and_format_steps(cur, tutorial_id)
+        # Fetch Ratings
+        ratings = fetch_and_format_ratings(cur, tutorial_id)
+        # Fetch User
+        user = fetch_and_format_user(cur, tutorial["user_id"])
+
+        tutorial_data = {
+            "id": tutorial["tutorial_id"],
+            "title": tutorial["title"],
+            "tutorialKind": tutorial["tutorial_kind"],
+            "user": user,
+            "time": tutorial["time"],
+            "difficulty": tutorial["difficulty"],
+            "completed": tutorial["complete"],
+            "description": tutorial["description"],
+            "previewPictureLink": tutorial["preview_picture_link"],
+            "previewType": tutorial["preview_type"],
+            "views": tutorial["views"],
+            "steps": steps,
+            "materials": materials,
+            "tools": tools,
+            "ratings": ratings
+        }
+
+        tutorials_formatted.append(tutorial_data)
+
+    cur.close()
+    conn.close()
+
+    return jsonify(tutorials_formatted), 200
+
+
+@app.route("/api/GetTutorialKind", methods=["GET"])
+def get_tutorial_kind():
+    kind = request.args.get('Kind')
+    if not kind:
+        return jsonify({"error": "Kind parameter is required"}), 400
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+    # Adjusted to fetch 10 random tutorials of the specified kind
+    cur.execute("""
+        SELECT * FROM Tutorials 
+        WHERE tutorial_kind = %s 
+        ORDER BY RANDOM() LIMIT 10
+    """, (kind,))
+    
+    tutorials_raw = cur.fetchall()
+    tutorials_formatted = []
+
+    for tutorial in tutorials_raw:
+        tutorial_id = tutorial["tutorial_id"]
+        
+        # Fetching Extra Data for each tutorial
+        materials = fetch_and_format_materials(cur, tutorial_id)
+        tools = fetch_and_format_tools(cur, tutorial_id)
+        steps = fetch_and_format_steps(cur, tutorial_id)
+        ratings = fetch_and_format_ratings(cur, tutorial_id)
+        user = fetch_and_format_user(cur, tutorial["user_id"])
+
+        tutorial_data = {
+            "id": tutorial["tutorial_id"],
+            "title": tutorial["title"],
+            "tutorialKind": tutorial["tutorial_kind"],
+            "user": user,
+            "time": tutorial["time"],
+            "difficulty": tutorial["difficulty"],
+            "completed": tutorial["complete"],
+            "description": tutorial["description"],
+            "previewPictureLink": tutorial["preview_picture_link"],
+            "previewType": tutorial["preview_type"],
+            "views": tutorial["views"],
+            "steps": steps,
+            "materials": materials,
+            "tools": tools,
+            "ratings": ratings
+        }
+
+        tutorials_formatted.append(tutorial_data)
+
+    cur.close()
+    conn.close()
+
+    return jsonify(tutorials_formatted), 200 if tutorials_formatted else jsonify({"message": "No tutorials found for the specified kind"}), 404
+
+#endregion
+
+#region tutorialCreation
+@app.route("/api/AddContent", methods=["POST"])
+@require_isCreator
+@require_auth
+def add_content():
+    data = request.json
+    tutorial_id = data.get('TutorialId')
+    step_id = data.get('StepId')
+    content_type = data.get('Type')  # 1 for TextContent, 2 for PictureContent, 3 for VideoContent
+    content = data.get('Content')
+
+    if not all([tutorial_id, step_id, content_type, content]):
+        return jsonify({"error": "Missing required fields"}), 400
+
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        # Dynamically select table based on content_type
+        if content_type == 1:
+            table_name = "TextContent"
+            column_name = "content_text"
+        elif content_type == 2:
+            table_name = "PictureContent"
+            column_name = "content_picture_link"
+        elif content_type == 3:
+            table_name = "VideoContent"
+            column_name = "content_video_link"
+        else:
+            return jsonify({"error": "Invalid content type"}), 400
+        
+        content_id = uuid.uuid4()
+        # Insert content into the selected table
+        cur.execute(f"""
+            INSERT INTO {table_name} (id, {column_name})
+            VALUES (%s, %s)
+        """, (uuid.uuid4(), content))
+        sub_step_id = uuid.uuid4()
+        # Insert a corresponding record into SubSteps table
+        cur.execute("""
+            INSERT INTO SubSteps (sub_step_id, content_type, content_id)
+            VALUES (%s, %s, %s)
+        """, (sub_step_id, content_type, content_id))
+
+        # Insert a record into SubStepsList table
+        cur.execute("""
+            INSERT INTO SubStepsList (sub_step_list_id, sub_step_id, step_id)
+            VALUES (%s, %s, %s)
+        """, (uuid.uuid4(), sub_step_id ,step_id))
+        conn.commit()
+
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return jsonify({"error": "Database error"}), 500
+    finally:
+        cur.close()
+        conn.close()
+
+    return jsonify({"success": True}), 200
+
+@app.route("/api/AddStep", methods=["POST"])
+@require_isCreator
+@require_auth
+def add_step():
+    data = request.json
+    tutorial_id = data.get('TutorialId')
+    title = data.get('Title')
+
+    if not all([tutorial_id, title]):
+        return jsonify({"error": "Missing required fields"}), 400
+
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        step_id = uuid.uuid4()
+        # Insert the new step into the Steps table
+        cur.execute("""
+            INSERT INTO Steps (step_id, tutorial_id, title)
+            VALUES (%s, %s, %s)
+        """, (step_id, tutorial_id, title))
+        conn.commit()
+
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return jsonify({"error": "Database error"}), 500
+    finally:
+        cur.close()
+        conn.close()
+
+    return jsonify({"success": True}), 200
+
+@app.route("/api/AddTutorial", methods=["POST"])
+@require_isCreator
+@require_auth
+def add_tutorial():
+    data = request.json
+    user_id = g.user_id
+    title = data.get('Title')
+    tutorial_kind = data.get('Kind')
+    time = data.get('Time')
+    difficulty = data.get('Difficulty')
+    description = data.get('Description')
+    preview_picture_link = data.get('PreviewPictureLink')
+    preview_type = data.get('PreviewType')
+
+    if not all([user_id, title, tutorial_kind, time, difficulty, description, preview_picture_link, preview_type]):
+        return jsonify({"error": "Missing required fields"}), 400
+
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        tutorial_id = uuid.uuid4()
+        # Insert the new tutorial into the Tutorials table
+        cur.execute("""
+            INSERT INTO Tutorials (tutorial_id, title, tutorial_kind, user_id, time, difficulty, complete, description, preview_picture_link, preview_type, views, steps)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 0, 0)
+        """, (tutorial_id, title, tutorial_kind, user_id, time, difficulty, False, description, preview_picture_link, preview_type))
+        conn.commit()
+        return jsonify({"success": True, "tutorial_id": str(tutorial_id)}), 200
+
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return jsonify({"error": "Database error"}), 500
+
+    finally:
+        if cur: cur.close()
+        if conn: conn.close()
+
+@app.route("/api/AddMaterial", methods=["POST"])
+@require_isCreator
+@require_auth
+def add_material():
+    data = request.json
+    tutorial_id = data.get('TutorialId')
+    title = data.get('Title')
+    amount = data.get('Amount')
+    price = data.get('Price')
+    link = data.get('Link')
+
+    if not all([tutorial_id, title, amount, price, link]):
+        return jsonify({"error": "Missing required fields"}), 400
+
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        material_id = uuid.uuid4()
+        # Insert the new material into the Material table
+        cur.execute("""
+            INSERT INTO Material (material_id, tutorial_id, mat_title, mat_amount, mat_price, link)
+            VALUES (%s, %s, %s, %s, %s, %s)
+        """, (material_id, tutorial_id, title, amount, price, link))
+        conn.commit()
+
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return jsonify({"error": "Database error"}), 500
+    finally:
+        cur.close()
+        conn.close()
+
+    return jsonify({"success": True}), 200
+
+@app.route("/api/AddTool", methods=["POST"])
+@require_isCreator
+@require_auth
+def add_tool():
+    data = request.json
+    tutorial_id = data.get('TutorialId')
+    title = data.get('Title')
+    amount = data.get('Amount')
+    link = data.get('Link')
+
+    if not all([tutorial_id, title, amount, link]):
+        return jsonify({"error": "Missing required fields"}), 400
+
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        tool_id = uuid.uuid4()
+        # Insert the new tool into the Tools table
+        cur.execute("""
+            INSERT INTO Tools (tool_id, tutorial_id, tool_title, tool_amount, link)
+            VALUES (%s, %s, %s, %s, %s)
+        """, (tool_id, tutorial_id, title, amount, link))
+        conn.commit()
+
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return jsonify({"error": "Database error"}), 500
+    finally:
+        cur.close()
+        conn.close()
+
+    return jsonify({"success": True}), 200
+
+@app.route("/api/AddSearchLink", methods=["POST"])
+@require_isCreator
+@require_auth
+def add_search_link():
+    data = request.json
+    tutorial_id = data.get('TutorialId')
+    link = data.get('Link')
+
+    if not all([tutorial_id, link]):
+        return jsonify({"error": "Missing required fields"}), 400
+
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        # Insert the new search link into the SearchLinks table
+        cur.execute("""
+            INSERT INTO SearchLinks (tutorial_id, link)
+            VALUES (%s, %s)
+        """, (tutorial_id, link))
+        conn.commit()
+
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return jsonify({"error": "Database error"}), 500
+    finally:
+        cur.close()
+        conn.close()
+
+    return jsonify({"success": True}), 200
+
+
+#endregion
