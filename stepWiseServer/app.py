@@ -13,15 +13,19 @@ import uuid
 
 app = Flask(__name__)
 
-s3 = boto3.client('s3',
-                  endpoint_url='http://localhost:9000',
-                  aws_access_key_id='6SIIaxeYMcBFyUwWzVVg',
-                  aws_secret_access_key='VcOrF8xljFj3Pp8kQZAlgTmik3F9c16XvhvwVxPO',
-                  region_name='eu-central-1')
 
-buckets = s3.list_buckets()
-for bucket in buckets['Buckets']:
-    print(bucket['Name'])
+# s3 = boto3.client('s3',
+#                   endpoint_url='http://localhost:9000',
+#                   aws_access_key_id='6SIIaxeYMcBFyUwWzVVg',
+#                   aws_secret_access_key='VcOrF8xljFj3Pp8kQZAlgTmik3F9c16XvhvwVxPO',
+#                   region_name='eu-central-1')
+
+# #testing bucket access
+# buckets = s3.list_buckets()
+# for bucket in buckets['Buckets']:
+#     print(bucket['Name'])
+
+#TODO: Press CMD + K + 0 to fold all code blocks for better readability
 
 @app.route("/")
 def hello_world():
@@ -30,12 +34,14 @@ def hello_world():
 if __name__ == "__main__":
     app.run(host="127.0.0.1", debug=True)
 
+#DB Config
 DB_NAME = "StepWiseServer"
 DB_USER = "postgres"
-DB_PASS = "your_password"
+DB_PASS = "2NPLCP@89!to"
 DB_HOST = "127.0.0.1"
 DB_PORT = "5432"
 
+#DB Connection
 def get_db_connection():
     conn = psycopg2.connect(
         dbname=DB_NAME,
@@ -81,6 +87,7 @@ def require_isCreator(f):
         cur = conn.cursor()
         cur.execute("SELECT creator FROM \"User\" WHERE user_id = %s", (user_id,))
         user = cur.fetchone()
+        # If the user is not a creator, return an error response
         if not user or not user['creator']:
             return jsonify({"error": "User is not a creator"}), 403
         cur.close()
@@ -89,6 +96,7 @@ def require_isCreator(f):
     return decorated_function
 
 #API Endpoints
+#region Tutorial
 @app.route("/api/tutorial/id/", methods=["GET"])
 def get_tutorial():
     conn = get_db_connection()
@@ -243,6 +251,55 @@ def get_tutorials():
         conn.close()
 
     return jsonify(tutorials_data)
+
+@app.route("/api/Rating", methods=["POST"])
+@require_auth
+def add_rating():
+    data = request.json
+    user_id = g.user_id
+    tutorial_id = data.get('TutorialId')
+    rating = data.get('Rating')
+
+    if not all([user_id, tutorial_id, rating]):
+        return jsonify({"error": "Missing required fields"}), 400
+
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        # Check if the user has already rated the tutorial
+        cur.execute("""
+            SELECT * FROM Ratings
+            WHERE user_id = %s AND tutorial_id = %s
+        """, (user_id, tutorial_id))
+        existing_rating = cur.fetchone()
+
+        if existing_rating:
+            # Update the existing rating
+            cur.execute("""
+                UPDATE Ratings
+                SET rating = %s
+                WHERE user_id = %s AND tutorial_id = %s
+            """, (rating, user_id, tutorial_id))
+        else:
+            # Insert a new rating
+            cur.execute("""
+                INSERT INTO Ratings (user_id, tutorial_id, rating)
+                VALUES (%s, %s, %s)
+            """, (user_id, tutorial_id, rating))
+        conn.commit()
+
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return jsonify({"error": "Database error"}), 500
+    finally:
+        cur.close()
+        conn.close()
+
+    return jsonify({"success": True}), 200
+
+
+#endregion
 
 #region Account
 @app.route("/api/change_password", methods=["POST"])
@@ -506,18 +563,33 @@ def remove_favorite():
 #endregion
 
 #region Browser
-@app.route("/api/GetBrowser", methods=["GET"])
+@app.route("/api/GetBrowser/", methods=["GET"])
 def get_browser():
-    user_id = request.headers.get('UserId', default=None)
-    session_key = request.headers.get('SessionKey', default=None)
-    authenticated = False
-
-    if user_id and session_key:
-        authenticated = authenticate(user_id, session_key)
-
+    
     conn = get_db_connection()
     cur = conn.cursor()
-    cur.execute("SELECT * FROM Tutorials ORDER BY RANDOM() LIMIT 10")
+    cur.execute("""
+            SELECT
+                t.tutorial_id,
+                t.title,
+                t.tutorial_kind,
+                u.user_id,
+                u.firstname,
+                u.lastname,
+                u.email,
+                u.creator,
+                t.time,
+                t.difficulty,
+                t.complete,
+                t.description,
+                t.preview_picture_link,
+                t.preview_type,
+                t.views,
+                t.steps
+            FROM Tutorials t
+            INNER JOIN "User" u ON t.user_id = u.user_id
+            ORDER BY RANDOM() LIMIT 10
+        """,)
     
     tutorials_raw = cur.fetchall()
     tutorials_formatted = []
@@ -544,7 +616,7 @@ def get_browser():
             "time": tutorial["time"],
             "difficulty": tutorial["difficulty"],
             "completed": tutorial["complete"],
-            "description": tutorial["description"],
+            "descriptionText": tutorial["description"],
             "previewPictureLink": tutorial["preview_picture_link"],
             "previewType": tutorial["preview_type"],
             "views": tutorial["views"],
@@ -562,9 +634,9 @@ def get_browser():
     return jsonify(tutorials_formatted), 200
 
 
-@app.route("/api/GetTutorialKind", methods=["GET"])
+@app.route("/api/GetBrowserKind", methods=["GET"])
 def get_tutorial_kind():
-    kind = request.args.get('Kind')
+    kind = request.headers.get('kind')
     if not kind:
         return jsonify({"error": "Kind parameter is required"}), 400
 
@@ -572,10 +644,28 @@ def get_tutorial_kind():
     cur = conn.cursor()
     # Adjusted to fetch 10 random tutorials of the specified kind
     cur.execute("""
-        SELECT * FROM Tutorials 
-        WHERE tutorial_kind = %s 
-        ORDER BY RANDOM() LIMIT 10
-    """, (kind,))
+            SELECT
+                t.tutorial_id,
+                t.title,
+                t.tutorial_kind,
+                u.user_id,
+                u.firstname,
+                u.lastname,
+                u.email,
+                u.creator,
+                t.time,
+                t.difficulty,
+                t.complete,
+                t.description,
+                t.preview_picture_link,
+                t.preview_type,
+                t.views,
+                t.steps
+            FROM Tutorials t
+            INNER JOIN "User" u ON t.user_id = u.user_id
+            WHERE tutorial_kind = %s 
+            ORDER BY RANDOM() LIMIT 10
+        """,(kind,))
     
     tutorials_raw = cur.fetchall()
     tutorials_formatted = []
