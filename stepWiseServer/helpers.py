@@ -92,7 +92,7 @@ def fetch_and_format_steps(cur, tutorial_id):
                 content_data = cur.fetchone()
                 if content_data:
                     content = {"id": content_data['id'], "pictureLink": content_data['pictureLink']}
-            elif sub_step['content_type'] == 3:  # Handling VideoContent
+            elif sub_step['content_type'] == 3:
                 cur.execute("SELECT id, content_video_link AS videoLink FROM VideoContent WHERE id = %s", (sub_step['content_id'],))
                 content_data = cur.fetchone()
                 if content_data:

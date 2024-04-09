@@ -1,0 +1,258 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "properties": {
+      "completed": {
+        "type": "boolean"
+      },
+      "descriptionText": {
+        "type": "string"
+      },
+      "difficulty": {
+        "type": "integer"
+      },
+      "id": {
+        "type": "string",
+        "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"
+      },
+      "materials": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "amount": {
+              "type": "integer"
+            },
+            "id": {
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"
+            },
+            "link": {
+              "type": "string",
+              "format": "uri"
+            },
+            "price": {
+              "type": "number"
+            },
+            "title": {
+              "type": "string"
+            }
+          },
+          "required": ["amount", "id", "link", "price", "title"]
+        }
+      },
+      "previewPictureLink": {
+        "type": "string",
+        "format": "uri"
+      },
+      "previewType": {
+        "type": "string"
+      },
+      "ratings": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"
+            },
+            "rating": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5
+            },
+            "text": {
+              "type": "string"
+            },
+            "user": {
+              "type": "object",
+              "properties": {
+                "email": {
+                  "type": "string",
+                  "format": "email"
+                },
+                "firstName": {
+                  "type": "string"
+                },
+                "id": {
+                  "type": "string",
+                  "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"
+                },
+                "isCreator": {
+                  "type": "boolean"
+                },
+                "lastName": {
+                  "type": "string"
+                }
+              },
+              "required": ["email", "firstName", "id", "isCreator", "lastName"]
+            }
+          },
+          "required": ["id", "rating", "text", "user"]
+        }
+      },
+      "steps": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"
+            },
+            "subStepList": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "content": {
+                    "type": "object",
+                    "properties": {
+                      "contentText": {
+                        "type": "string"
+                      },
+                      "id": {
+                        "type": "string",
+                        "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"
+                      }
+                    },
+                    "required": ["contentText", "id"]
+                  },
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"
+                  },
+                  "type": {
+                    "type": "integer"
+                  }
+                },
+                "required": ["content", "id", "type"]
+              }
+            },
+            "title": {
+              "type": "string"
+            },
+            "userComments": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"
+                  },
+                  "text": {
+                    "type": "string"
+                  },
+                  "user": {
+                    "type": "object",
+                    "properties": {
+                      "email": {
+                        "type": "string",
+                        "format": "email"
+                      },
+                      "firstName": {
+                        "type": "string"
+                      },
+                      "id": {
+                        "type": "string",
+                        "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"
+                      },
+                      "isCreator": {
+                        "type": "boolean"
+                      },
+                      "lastName": {
+                        "type": "string"
+                      }
+                    },
+                    "required": ["email", "firstName", "id", "isCreator", "lastName"]
+                  }
+                },
+                "required": ["id", "text", "user"]
+              }
+            }
+          },
+          "required": ["id", "subStepList", "title", "userComments"]
+        }
+      },
+      "time": {
+        "type": "integer"
+      },
+      "title": {
+        "type": "string"
+      },
+      "tools": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "amount": {
+              "type": "integer"
+            },
+            "id": {
+              "type": "string",
+              "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"
+            },
+            "link": {
+              "type": "string",
+              "format": "uri"
+            },
+            "title": {
+              "type": "string"
+            }
+          },
+          "required": ["amount", "id", "link", "title"]
+        }
+      },
+      "tutorialKind": {
+        "type": "string"
+      },
+      "user": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "firstName": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string",
+            "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"
+          },
+          "isCreator": {
+            "type": "boolean"
+          },
+          "lastName": {
+            "type": "string"
+          }
+        },
+        "required": ["email", "firstName", "id", "isCreator", "lastName"]
+      },
+      "views": {
+        "type": "integer"
+      }
+    },
+    "required": [
+      "completed",
+      "descriptionText",
+      "difficulty",
+      "id",
+      "materials",
+      "previewPictureLink",
+      "previewType",
+      "ratings",
+      "steps",
+      "time",
+      "title",
+      "tools",
+      "tutorialKind",
+      "user",
+      "views"
+    ]
+  }
+}
