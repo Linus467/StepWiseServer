@@ -11,6 +11,7 @@ import os
 from flask import current_app
 from werkzeug.security import check_password_hash, generate_password_hash
 import uuid
+import io
 #DB Connection
 
 def get_db_connection():
@@ -171,18 +172,45 @@ class TestAPI(TestCase):
             "user_id": user['user_id'],
             "session_key": user['session_key'] 
         }
-        print("user: ", user)
         if user['session_key'] is None:
             session_key = uuid.uuid4()
             self.cur.execute("UPDATE \"User\" SET session_key = %s WHERE user_id = %s", (str(session_key), user['user_id']))
             self.conn.commit()
             headers['session_key'] = session_key
-        print("headers: ", headers)
         
         response = self.client.get('/api/GetUser', headers=headers)
         self.assertEqual(response.status_code, 200, "Result: " + response.data.decode('utf-8'))
 
 
+
+
+    def test_video_upload(self):
+        # Get the directory of the current script
+        current_directory = os.path.dirname(__file__)
+        # Construct the path to the MP4 file relative to the current script
+        file_path = os.path.join(current_directory, 'IMG_2696.MP4')
+
+        with open(file_path, 'rb') as mp4:
+            data = {
+                'file': (mp4, 'IMG_2696.MP4')
+            }
+            response = self.client.post('/api/VideoUpload', content_type='multipart/form-data', data=data)
+
+        self.assertEqual(response.status_code, 200, "Result: " + response.data.decode('utf-8'))
+
+    def test_picture_upload(self):
+        # Get the directory of the current script
+        current_directory = os.path.dirname(__file__)
+        # Construct the path to the MP4 file relative to the current script
+        file_path = os.path.join(current_directory, 'Amazon_Web_Services-Logo.PNG')
+
+        with open(file_path, 'rb') as jpg:
+            data = {
+                'file': (jpg, 'Amazon_Web_Services-Logo.PNG')
+            }
+            response = self.client.post('/api/PictureUpload', content_type='multipart/form-data', data=data)
+
+        self.assertEqual(response.status_code, 200, "Result: " + response.data.decode('utf-8'))
 
 if __name__ == '__main__':
     unittest.main()

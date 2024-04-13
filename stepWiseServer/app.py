@@ -1,16 +1,20 @@
+import os
 from flasgger import Swagger
 from flask import Flask, jsonify, request, abort, g
 import boto3
+from botocore.client import Config
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from functools import wraps
 import pdb
 from helpers import (fetch_and_format_materials, fetch_and_format_tools, 
-                     fetch_and_format_steps, fetch_and_format_ratings, fetch_and_format_user)
+                    fetch_and_format_steps, fetch_and_format_ratings, fetch_and_format_user)
 from werkzeug.security import check_password_hash, generate_password_hash
 import uuid
 import json
 import re
+from minio import Minio
+from minio.error import S3Error
 
 def create_app(test_config=None):
     app = Flask(__name__)
@@ -24,19 +28,22 @@ def create_app(test_config=None):
             DATABASE_PASSWORD="2NPLCP@89!to",
             DATABASE_HOST="127.0.0.1",
             DATABASE_PORT="5432",
-            TEST_ENVIRONMENT='False'
+            TEST_ENVIRONMENT='False',
+            S3_DATA_BUCKET_URL = 'http://localhost:9000'
         )
 
-    # s3 = boto3.client('s3',
-    #                   endpoint_url='http://localhost:9000',
-    #                   aws_access_key_id='6SIIaxeYMcBFyUwWzVVg',
-    #                   aws_secret_access_key='VcOrF8xljFj3Pp8kQZAlgTmik3F9c16XvhvwVxPO',
-    #                   region_name='eu-central-1')
-
-    # #testing bucket access
-    # buckets = s3.list_buckets()
-    # for bucket in buckets['Buckets']:
-    #     print(bucket['Name'])
+    s3 = boto3.client('s3',
+                    endpoint_url= app.config.get('S3_DATA_BUCKET_URL'),
+                    aws_access_key_id='e4LGvDlGjdD93i0pN1rq',
+                    aws_secret_access_key='vSlc0AS8ONBYHVKWfow0Y6NLXmEJy4xvvWhgqMK8',
+                    region_name='eu-central-1',
+                    config=Config(signature_version='s3v4')
+    )
+    minio_client = Minio(str(app.config.get('S3_DATA_BUCKET_URL')),
+                    access_key='e4LGvDlGjdD93i0pN1rq',
+                    secret_key='vSlc0AS8ONBYHVKWfow0Y6NLXmEJy4xvvWhgqMK8',
+                    secure=False,
+    )
 
     #DB Connection
     def get_db_connection():
@@ -94,6 +101,7 @@ def create_app(test_config=None):
             conn.close()
             return f(*args, **kwargs)
         return decorated_function
+    
     #email check
     def check_email(email):
         if re.match(r"[^@]+@[^@]+\.[^@]+", email):
@@ -101,6 +109,11 @@ def create_app(test_config=None):
         return False
 
     #API Endpoints
+
+    @app.route('/')
+    def index():
+        return jsonify({"message" : "Hello StepWise!"})
+    
     #region Tutorial
     @app.route("/api/tutorial/id/", methods=["GET"])
     def get_tutorial():
@@ -971,8 +984,75 @@ def create_app(test_config=None):
 
         return jsonify({"success": True}), 200
 
-    return app
     #endregion
+
+    #region BucketUpload
+    @app.route("/api/VideoUpload", methods=["POST"])
+    # @require_auth
+    # @require_isCreator
+    def upload_video():
+        if 'file' not in request.files:
+            return jsonify({"error": "No files part"}), 400
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({"error": "Wrong file name"}), 400
+        
+        file_uuid = str(uuid.uuid4())
+        file.filename = f"{file_uuid}.mp4"
+        if file:
+            bucket_name = 'video'
+            file_size = file.seek(0, os.SEEK_END)
+            file.seek(0)
+            try:
+                s3.upload_fileobj(
+                    file,
+                    bucket_name,
+                    file.filename,
+                    ExtraArgs={
+                        'ContentType': file.content_type
+                    }
+                )
+
+            except S3Error as e:
+                return jsonify({"error": str(e)}), 500
+            
+        return jsonify({"message:" : "Upload successful", "VideoPath" : f"{app.config.get('S3_DATA_BUCKET_URL')}/video/{file.name}"}), 200
+
+    @app.route("/api/PictureUpload", methods=["POST"])
+    # @require_auth
+    # @require_isCreator
+    def upload_picture():
+        data = request.json
+        picture_type = data.get('Type')
+        if 'file' not in request.files:
+            return jsonify({"error": "No files part"}), 400
+        
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({"error": "Wrong file name"}), 400
+        
+        file_uuid = str(uuid.uuid4())
+        file_key = f"{file_uuid}.jpg"
+        if file:
+            bucket_name = 'picture'
+            file_name = file.filename
+            try:
+                minio_client.put_object(
+                    file,
+                    bucket_name,
+                    file_key,
+                    content_type=file.content_type
+                )
+
+            except Exception as e:
+                return jsonify({"error: " : str(e)}), 500
+            
+        return jsonify({"message:" : "Upload successful"}), 200
+
+    #endregion
+
+    return app
 
 if __name__ == "__main__":
     app = create_app()
