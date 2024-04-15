@@ -27,11 +27,11 @@ def create_app(test_config=None):
             DATABASE_USER="postgres",
             DATABASE_PASSWORD="2NPLCP@89!to",
             DATABASE_HOST="127.0.0.1",
-            DATABASE_PORT="5432",
+            DATABASE_PORT="5433",
             TEST_ENVIRONMENT='False',
             S3_DATA_BUCKET_URL = 'http://localhost:9000'
         )
-
+    app.debug = app.config.get('TEST_ENVIRONMENT')
     s3 = boto3.client('s3',
                     endpoint_url= app.config.get('S3_DATA_BUCKET_URL'),
                     aws_access_key_id='e4LGvDlGjdD93i0pN1rq',
@@ -116,7 +116,7 @@ def create_app(test_config=None):
     
     #region Tutorial
     @app.route("/api/tutorial/id/", methods=["GET"])
-    def get_tutorial():
+    def get_tutorial(): 
         conn = get_db_connection()
         cur = conn.cursor()
         tutorial_id = request.headers.get('tutorial_id')
@@ -465,52 +465,153 @@ def create_app(test_config=None):
         conn = get_db_connection()
         cur = conn.cursor()
         #getting the user in the correct format
+        print("user_id:", user_id)
         user = fetch_and_format_user(cur, user_id)
         cur.close()
         conn.close()
-        return jsonify(user), 200
+        return jsonify({"user" : user}), 200
+    
+    @app.route("/api/UpdateUser", methods=["POST"])
+    @require_auth
+    def update_user():
+        data = request.json
+        user_id = request.headers.get('user_id')
+        firstname = data.get('firstname')
+        lastname = data.get('lastname')
+        email = data.get('email')
+        creator = data.get('creator')
+
+        if not all([firstname, lastname, email, creator]):
+            return jsonify({"error": "Missing required fields"}), 400
+        
+        #DB connection
+        conn = get_db_connection()
+        cur = conn.cursor()
+
+        try:
+            #Getting user id and checking if user_id is the same
+            cur.execute("SELECT user_id FROM \"User\" WHERE user_id = %s", (user_id,))
+            user = cur.fetchone()
+            if not user:
+                return jsonify({"error": "User not found"}), 404
+            if user['user_id'] != user_id:
+                return jsonify({"error": "User not authorized"}), 403
+
+            #Updating users credentials
+            cur.execute("""
+                UPDATE "User"
+                SET firstname = %s, lastname = %s, email = %s, creator = %s
+                WHERE user_id = %s
+            """, (firstname, lastname, email, creator, user_id))
+            conn.commit()
+            return jsonify({"success": True}), 200
+        except Exception as e:
+            return jsonify({"error": "Database error"}), 500
+        finally:
+            cur.close()
+            conn.close()
     #endregion
 
     #region History
     @app.route("/api/GetHistoryList", methods=["GET"])
     @require_auth
     def get_history_list():
-        user_id = request.args.get('UserId')
-        session_key = request.args.get('sessionKey')
+        user_id = request.headers.get('user_id')
+        session_key = request.headers.get('session_key')
+        tutorials_data_result = []
         
-        if authenticate(user_id, session_key):
+        try:
             conn = get_db_connection()
             cur = conn.cursor()
             cur.execute("""
-                SELECT t.* FROM Tutorials t
-                JOIN Watch_History h ON t.tutorial_id = h.tutorial_id
-                WHERE h.user_id = %s
+                SELECT
+                    t.tutorial_id,
+                    t.title,
+                    t.tutorial_kind,
+                    u.user_id,
+                    u.firstname,
+                    u.lastname,
+                    u.email,
+                    u.creator,
+                    t.time,
+                    t.difficulty,
+                    t.complete,
+                    t.description,
+                    t.preview_picture_link,
+                    t.preview_type,
+                    t.views,
+                    t.steps
+                FROM Tutorials t
+                INNER JOIN "User" u ON t.user_id = u.user_id
+                INNER JOIN Watch_History wh ON wh.user_id = %s
             """, (user_id,))
-            tutorials = cur.fetchall()
+
+            tutorials_data = cur.fetchall()
+
+            if(tutorials_data.count(cur) == 0):
+                return jsonify({"Empty": "Empty"}), 201
+            
+            for tutorial_data in tutorials_data:
+                    # For each tutorial, fetch additional data like materials, tools, steps, and ratings
+                    tutorial_id = tutorial_data['tutorial_id']
+                    materials = fetch_and_format_materials(cur, tutorial_id)
+                    tools = fetch_and_format_tools(cur, tutorial_id)
+                    steps = fetch_and_format_steps(cur, tutorial_id)
+                    ratings = fetch_and_format_ratings(cur, tutorial_id)
+                    
+                    # Add the fetched data to the tutorial_data dictionary
+                    tutorials_data_result.append({
+                        "id": tutorial_data["tutorial_id"],
+                        "title": tutorial_data["title"],
+                        "tutorialKind": tutorial_data["tutorial_kind"],
+                        "user": {
+                            "id": tutorial_data["user_id"],
+                            "firstName": tutorial_data["firstname"],
+                            "lastName": tutorial_data["lastname"],
+                            "email": tutorial_data["email"],
+                            "isCreator": tutorial_data["creator"]
+                        },
+                        "time": tutorial_data["time"],
+                        "difficulty": tutorial_data["difficulty"],
+                        "completed": tutorial_data["complete"],
+                        "description": tutorial_data["description"],
+                        "previewPictureLink": tutorial_data["preview_picture_link"],
+                        "previewType": tutorial_data["preview_type"],
+                        "views": tutorial_data["views"],
+                        "steps": steps,
+                        "materials": materials,
+                        "tools": tools,
+                        "ratings": ratings
+                    })
+                # Return the list of tutorials
+            
             cur.close()
             conn.close()
-            return jsonify(tutorials), 200
-        else:
-            return jsonify({"error": "Authentication failed"}), 401
+        except Exception as e:
+            return jsonify({"error": f"Database error: {e}"}), 500
+        return jsonify(tutorial_data), 200
 
     @app.route("/api/DeleteHistorySingle", methods=["DELETE"])
     @require_auth
     def delete_history_single():
         # Get parameters from the request
-        user_id = g.user_id
-        tutorial_id = request.args.get('TutorialId')
+        user_id = request.headers.get('user_id')
+        tutorial_id = request.headers.get('tutorial_id')
         
         # DB connection
         conn = get_db_connection()
         cur = conn.cursor()
         # Delete the tutorial from the user's watch history
-        cur.execute("""
-            DELETE FROM Watch_History
-            WHERE user_id = %s AND tutorial_id = %s
-        """, (user_id, tutorial_id))
-        conn.commit()
-        cur.close()
-        conn.close()
+        try:
+            cur.execute("""
+                DELETE FROM Watch_History
+                WHERE user_id = %s AND tutorial_id = %s
+            """, (user_id, tutorial_id))
+            conn.commit()
+            cur.close()
+            conn.close()
+        except Exception as e:
+            return jsonify({"error": f"Database error: {e}"}), 500
         
         return jsonify({"success": True}), 200
 
@@ -518,7 +619,7 @@ def create_app(test_config=None):
     @require_auth
     def delete_history():
         # Get the user_id from require auth decorator
-        user_id = g.user_id
+        user_id = request.headers.get('user_id')
         
         # DB connection
         conn = get_db_connection()

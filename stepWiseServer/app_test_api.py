@@ -1,3 +1,4 @@
+import datetime
 import json
 from flask_testing import TestCase
 from app import create_app  
@@ -25,6 +26,7 @@ def get_db_connection():
         cursor_factory=RealDictCursor)
     return conn
 
+
 class TestAPI(TestCase):
     #init app
     def create_app(self):
@@ -35,7 +37,7 @@ class TestAPI(TestCase):
             'DATABASE_USER': "postgres",
             'DATABASE_PASSWORD': "2NPLCP@89!to",
             'DATABASE_HOST': "127.0.0.1",
-            'DATABASE_PORT': "5432",
+            'DATABASE_PORT': "5433",
             'TEST_ENVIRONMENT': 'True'
         }
         app = create_app(test_config)
@@ -50,6 +52,20 @@ class TestAPI(TestCase):
         self.cur.close()
         self.conn.close()
 
+    def _get_random_user(self):
+        conn = get_db_connection()
+        cur = conn.cursor()
+        try:
+            cur.execute("Select * from \"User\" u ORDER BY RANDOM() LIMIT 1")
+            user = cur.fetchone()
+            session_key = uuid.uuid4()
+            if user['session_key'] is None:
+                cur.execute("UPDATE \"User\" SET session_key = %s WHERE user_id = %s", (str(session_key), user['user_id']))
+                conn.commit()
+                user['session_key'] = session_key
+            return user
+        except Exception as e:
+            self.fail("Error getting random user: " + str(e))
 
     # Browser Testing
     def test_get_browser_json(self):
@@ -57,21 +73,18 @@ class TestAPI(TestCase):
 
         self.assertEqual(response.status_code, 200, "Expected HTTP 200 response.")
 
-        schema_path = os.path.join(os.path.dirname(__file__), 'TutorialJson.json')
+        schema_path = os.path.join(os.path.dirname(__file__), 'json_schemas/Tutorial.json')
         with open(schema_path) as schema_file:
             schema = json.load(schema_file)
 
-        try:
-            data = response.json
-        except ValueError:
-            self.fail("Response is not in JSON format. Status code: " + str(response.status_code))
+        data = response.json
 
         try:
             validate(instance=data, schema=schema)
         except ValidationError as e:
             self.fail(f"Response JSON does not match the expected schema: {str(e)} status_code: {response.status_code}")
 
-    # Tutorial Testing
+    #region Tutorial Testing
     def test_get_tutorial_json(self):
         self.cur.execute("""
                         Select *
@@ -86,21 +99,24 @@ class TestAPI(TestCase):
 
         self.assertEqual(response.status_code, 200, "Result: " + response.data.decode('utf-8'))
 
-        schema_path = os.path.join(os.path.dirname(__file__), 'TutorialJson.json')
-        with open(schema_path) as schema_file:
-            schema = json.load(schema_file)
+        if response.status_code == 200:
+            schema_path = os.path.join(os.path.dirname(__file__), 'json_schemas/Tutorial.json')
+            with open(schema_path) as schema_file:
+                schema = json.load(schema_file)
+            
+            try:
+                data = response.json
+            except ValueError:
+                self.fail("Response is not in JSON format.")
         
-        try:
-            data = response.json
-        except ValueError:
-            self.fail("Response is not in JSON format.")
-        
-        try:
-            validate(instance=data, schema=schema)
-        except ValidationError as e:
-            self.fail(f"Response JSON does not match the expected schema: {str(e)} status_code: {response.status_code}")
+            try:
+                validate(instance=data, schema=schema)
+            except ValidationError as e:
+                self.fail(f"Response JSON does not match the expected schema: {str(e)} status_code: {response.status_code}")
 
-    # Account Testing
+    #endregion
+
+    #region Account Testing
     def test_change_password(self):
         
         user = {
@@ -168,49 +184,218 @@ class TestAPI(TestCase):
     def test_get_user(self):
         self.cur.execute("Select * from \"User\" u ORDER BY RANDOM() LIMIT 1")
         user = self.cur.fetchone()
-        headers = {
-            "user_id": user['user_id'],
-            "session_key": user['session_key'] 
-        }
+        session_key = uuid.uuid4()
         if user['session_key'] is None:
-            session_key = uuid.uuid4()
             self.cur.execute("UPDATE \"User\" SET session_key = %s WHERE user_id = %s", (str(session_key), user['user_id']))
             self.conn.commit()
-            headers['session_key'] = session_key
-        
+        else:
+            session_key = user['session_key']
+
+        headers = {
+            "user_id": user['user_id'],
+            "session_key": session_key
+        }
+
         response = self.client.get('/api/GetUser', headers=headers)
         self.assertEqual(response.status_code, 200, "Result: " + response.data.decode('utf-8'))
 
+    def test_update_user(self):
+        self.cur.execute("Select * from \"User\" u ORDER BY RANDOM() LIMIT 1")
+        user = self.cur.fetchone()
+        session_key = uuid.uuid4()
+        #update session key if none
+        if user['session_key'] is None:
+            self.cur.execute("UPDATE \"User\" SET session_key = %s WHERE user_id = %s", (str(session_key), user['user_id']))
+            self.conn.commit()
+        else:
+            session_key = user['session_key']
 
+        payload = {
+            "user_id": user['user_id'],
+            "session_key": str(session_key),
+            "firstname": "John",
+            "lastname": "Doe",
+            "email": "john@example.com",
+            "creator": True
+        }
 
+        header = {
+            "user_id": user['user_id'],
+            "session_key": str(session_key)
+        }
 
-    def test_video_upload(self):
-        # Get the directory of the current script
-        current_directory = os.path.dirname(__file__)
-        # Construct the path to the MP4 file relative to the current script
-        file_path = os.path.join(current_directory, 'IMG_2696.MP4')
+        response = self.client.post('/api/UpdateUser', data=json.dumps(payload), headers=header, content_type='application/json')
+        self.assertEqual(response.status_code, 200, "Result: " + response.data.decode('utf-8'))
 
-        with open(file_path, 'rb') as mp4:
-            data = {
-                'file': (mp4, 'IMG_2696.MP4')
-            }
-            response = self.client.post('/api/VideoUpload', content_type='multipart/form-data', data=data)
+    #endregion
+
+    #region History Testing
+    def test_get_history(self):
+        self.cur.execute("Select * from \"User\" u ORDER BY RANDOM() LIMIT 1")
+        user = self.cur.fetchone()
+        session_key = uuid.uuid4()
+        if user['session_key'] is None:
+            self.cur.execute("UPDATE \"User\" SET session_key = %s WHERE user_id = %s", (str(session_key), user['user_id']))
+            self.conn.commit()
+        else:
+            session_key = user['session_key']
+
+        headers = {
+            "user_id": user['user_id'],
+            "session_key": session_key
+        }
+
+        #Adding single history list to user to have a history
+        # self.cur.execute("Select tutorial_id from Tutorials ORDER BY RANDOM() LIMIT 1")
+        # tutorial = self.cur.fetchone()
+
+        # self.cur.execute("""
+        #                 Insert into Watch_History
+        #                 (user_id, tutorial_id,last_watched_time, completed_steps)
+        #                 values (%s, %s,2024-03-30 14:51:39.474617+01,0)
+        #                 """,
+        #             (user['user_id'],tutorial['tutorial_id']))
+        # self.conn.commit()
+
+        #Checking json schema
+        schema_path = os.path.join(os.path.dirname(__file__), 'json_schemas/Tutorial.json')
+        with open(schema_path) as schema_file:
+            schema = json.load(schema_file)
+
+        response = self.client.get('/api/GetHistoryList', headers=headers)
+
+        self.assertIn(response.status_code, [200,201], "Result: " + response.data.decode('utf-8'))
+        if response.status_code == 200:
+            try:
+                data = response.json
+                validate(instance=data, schema=schema)
+            except ValidationError as e:
+                self.fail(f"Response JSON does not match the expected schema: {str(e)} status_code: {response.status_code}")
+    
+    def test_delete_history_single(self):
+        self.cur.execute("Select * from \"User\" u ORDER BY RANDOM() LIMIT 1")
+        user = self.cur.fetchone()
+        session_key = uuid.uuid4()
+        if user['session_key'] is None:
+            self.cur.execute("UPDATE \"User\" SET session_key = %s WHERE user_id = %s", (str(session_key), user['user_id']))
+            self.conn.commit()
+        else:
+            session_key = user['session_key']
+
+        #Tutorial to delete selected randomly
+        self.cur.execute("Select tutorial_id from Tutorials ORDER BY RANDOM() LIMIT 1")
+        tutorial = self.cur.fetchone()
+
+        #Insert history to delete
+        current_time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        self.cur.execute("""
+                        Insert into Watch_History 
+                        (user_id, tutorial_id,last_watched_time, completed_steps) 
+                        values (%s, %s,%s,0)
+                        """, 
+                    (user['user_id'],tutorial['tutorial_id'], current_time))
+        self.conn.commit()
+
+        headers = {
+            "user_id": user['user_id'],
+            "session_key": session_key,
+            "tutorial_id": tutorial['tutorial_id']
+        }
+
+        response = self.client.delete('/api/DeleteHistorySingle', headers=headers)
+
+        # Check if history was deleted
+        self.cur.execute("SELECT * FROM Watch_History WHERE user_id = %s AND tutorial_id = %s", (user['user_id'], tutorial['tutorial_id']))
+        history = self.cur.fetchone()
+        if history is not None:
+            self.fail("History not deleted.")
 
         self.assertEqual(response.status_code, 200, "Result: " + response.data.decode('utf-8'))
 
-    def test_picture_upload(self):
-        # Get the directory of the current script
-        current_directory = os.path.dirname(__file__)
-        # Construct the path to the MP4 file relative to the current script
-        file_path = os.path.join(current_directory, 'Amazon_Web_Services-Logo.PNG')
+    def test_delete_history(self):
+        self.cur.execute("Select * from \"User\" u ORDER BY RANDOM() LIMIT 1")
+        user = self.cur.fetchone()
+        session_key = uuid.uuid4()
+        if user['session_key'] is None:
+            self.cur.execute("UPDATE \"User\" SET session_key = %s WHERE user_id = %s", (str(session_key), user['user_id']))
+            self.conn.commit()
+        else:
+            session_key = user['session_key']
 
-        with open(file_path, 'rb') as jpg:
-            data = {
-                'file': (jpg, 'Amazon_Web_Services-Logo.PNG')
-            }
-            response = self.client.post('/api/PictureUpload', content_type='multipart/form-data', data=data)
+        #Tutorial to delete selected randomly
+        self.cur.execute("Select tutorial_id from Tutorials ORDER BY RANDOM() LIMIT 1")
+        tutorial = self.cur.fetchone()
+
+        #Insert history to delete
+        current_time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        self.cur.execute("""
+                        Insert into Watch_History 
+                        (user_id, tutorial_id,last_watched_time, completed_steps) 
+                        values (%s, %s,%s,0)
+                        """, 
+                    (user['user_id'],tutorial['tutorial_id'],current_time))
+        self.conn.commit()
+
+        headers = {
+            "user_id": user['user_id'],
+            "session_key": session_key,
+            "tutorial_id": tutorial['tutorial_id']
+        }
+
+        response = self.client.delete('/api/DeleteHistorySingle', headers=headers)
+
+        # Check if history was deleted
+        self.cur.execute("SELECT * FROM Watch_History WHERE user_id = %s ", (user['user_id'],))
+        history = self.cur.fetchone()
+        if history is not None:
+            self.fail("History not deleted.")
 
         self.assertEqual(response.status_code, 200, "Result: " + response.data.decode('utf-8'))
+
+    #endregion
+
+    #region Search Testing
+
+    def test_search_query(self):
+        user = self._get_random_user()
+
+        headers = {
+            "user_id": user['user_id'],
+            "session_key": user['session_key'],
+        }
+
+        response = self.client.get('/api/SearchQuery', headers=headers)
+        self.assertEqual(response.status_code, 200, "Result: " + response.data.decode('utf-8'))
+
+
+    #endregion
+    # def test_video_upload(self):
+    #     # Get the directory of the current script
+    #     current_directory = os.path.dirname(__file__)
+    #     # Construct the path to the MP4 file relative to the current script
+    #     file_path = os.path.join(current_directory, 'IMG_2696.MP4')
+
+    #     with open(file_path, 'rb') as mp4:
+    #         data = {
+    #             'file': (mp4, 'IMG_2696.MP4')
+    #         }
+    #         response = self.client.post('/api/VideoUpload', content_type='multipart/form-data', data=data)
+
+    #     self.assertEqual(response.status_code, 200, "Result: " + response.data.decode('utf-8'))
+
+    # # def test_picture_upload(self):
+    #     # Get the directory of the current script
+    #     current_directory = os.path.dirname(__file__)
+    #     # Construct the path to the MP4 file relative to the current script
+    #     file_path = os.path.join(current_directory, 'Amazon_Web_Services-Logo.PNG')
+
+    #     with open(file_path, 'rb') as jpg:
+    #         data = {
+    #             'file': (jpg, 'Amazon_Web_Services-Logo.PNG')
+    #         }
+    #         response = self.client.post('/api/PictureUpload', content_type='multipart/form-data', data=data)
+
+    #     self.assertEqual(response.status_code, 200, "Result: " + response.data.decode('utf-8'))
 
 if __name__ == '__main__':
     unittest.main()
