@@ -53,19 +53,37 @@ class TestAPI(TestCase):
         self.conn.close()
 
     def _get_random_user(self):
-        conn = get_db_connection()
-        cur = conn.cursor()
         try:
-            cur.execute("Select * from \"User\" u ORDER BY RANDOM() LIMIT 1")
-            user = cur.fetchone()
+            self.cur.execute("Select * from \"User\" u ORDER BY RANDOM() LIMIT 1")
+            user = self.cur.fetchone()
             session_key = uuid.uuid4()
             if user['session_key'] is None:
-                cur.execute("UPDATE \"User\" SET session_key = %s WHERE user_id = %s", (str(session_key), user['user_id']))
-                conn.commit()
+                self.cur.execute("UPDATE \"User\" SET session_key = %s WHERE user_id = %s", (str(session_key), user['user_id']))
+                self.conn.commit()
                 user['session_key'] = session_key
             return user
         except Exception as e:
             self.fail("Error getting random user: " + str(e))
+
+    def _get_tutorial(self, user_id = None):
+        try:
+            if user_id is None:
+                self.cur.execute("Select * from Tutorials t ORDER BY RANDOM() LIMIT 1")
+            else:
+                self.cur.execute("Select * from Tutorials t WHERE t.user_id = %s LIMIT 1", (user_id,))
+            tutorial = self.cur.fetchone()
+            return tutorial
+        except Exception as e:
+            self.fail("Error getting random tutorial: " + str(e))
+
+    def _test_tutorial_json(self, data):
+        schema_path = os.path.join(os.path.dirname(__file__), 'json_schemas/Tutorial.json')
+        with open(schema_path) as schema_file:
+            schema = json.load(schema_file)
+        try:
+            validate(instance=data, schema=schema)
+        except ValidationError as e:
+            self.fail(f"Response JSON does not match the expected schema: {str(e)}")
 
     # Browser Testing
     def test_get_browser_json(self):
@@ -73,16 +91,7 @@ class TestAPI(TestCase):
 
         self.assertEqual(response.status_code, 200, "Expected HTTP 200 response.")
 
-        schema_path = os.path.join(os.path.dirname(__file__), 'json_schemas/Tutorial.json')
-        with open(schema_path) as schema_file:
-            schema = json.load(schema_file)
-
-        data = response.json
-
-        try:
-            validate(instance=data, schema=schema)
-        except ValidationError as e:
-            self.fail(f"Response JSON does not match the expected schema: {str(e)} status_code: {response.status_code}")
+        self._test_tutorial_json(response.json)
 
     #region Tutorial Testing
     def test_get_tutorial_json(self):
@@ -100,19 +109,7 @@ class TestAPI(TestCase):
         self.assertEqual(response.status_code, 200, "Result: " + response.data.decode('utf-8'))
 
         if response.status_code == 200:
-            schema_path = os.path.join(os.path.dirname(__file__), 'json_schemas/Tutorial.json')
-            with open(schema_path) as schema_file:
-                schema = json.load(schema_file)
-            
-            try:
-                data = response.json
-            except ValueError:
-                self.fail("Response is not in JSON format.")
-        
-            try:
-                validate(instance=data, schema=schema)
-            except ValidationError as e:
-                self.fail(f"Response JSON does not match the expected schema: {str(e)} status_code: {response.status_code}")
+            self._test_tutorial_json(response.json)
 
     #endregion
 
@@ -231,18 +228,10 @@ class TestAPI(TestCase):
 
     #region History Testing
     def test_get_history(self):
-        self.cur.execute("Select * from \"User\" u ORDER BY RANDOM() LIMIT 1")
-        user = self.cur.fetchone()
-        session_key = uuid.uuid4()
-        if user['session_key'] is None:
-            self.cur.execute("UPDATE \"User\" SET session_key = %s WHERE user_id = %s", (str(session_key), user['user_id']))
-            self.conn.commit()
-        else:
-            session_key = user['session_key']
-
+        user = self._get_random_user()
         headers = {
             "user_id": user['user_id'],
-            "session_key": session_key
+            "session_key": user['session_key']
         }
 
         #Adding single history list to user to have a history
@@ -258,29 +247,15 @@ class TestAPI(TestCase):
         # self.conn.commit()
 
         #Checking json schema
-        schema_path = os.path.join(os.path.dirname(__file__), 'json_schemas/Tutorial.json')
-        with open(schema_path) as schema_file:
-            schema = json.load(schema_file)
 
         response = self.client.get('/api/GetHistoryList', headers=headers)
 
         self.assertIn(response.status_code, [200,201], "Result: " + response.data.decode('utf-8'))
         if response.status_code == 200:
-            try:
-                data = response.json
-                validate(instance=data, schema=schema)
-            except ValidationError as e:
-                self.fail(f"Response JSON does not match the expected schema: {str(e)} status_code: {response.status_code}")
+            self._test_tutorial_json(response.json)
     
     def test_delete_history_single(self):
-        self.cur.execute("Select * from \"User\" u ORDER BY RANDOM() LIMIT 1")
-        user = self.cur.fetchone()
-        session_key = uuid.uuid4()
-        if user['session_key'] is None:
-            self.cur.execute("UPDATE \"User\" SET session_key = %s WHERE user_id = %s", (str(session_key), user['user_id']))
-            self.conn.commit()
-        else:
-            session_key = user['session_key']
+        user = self._get_random_user()
 
         #Tutorial to delete selected randomly
         self.cur.execute("Select tutorial_id from Tutorials ORDER BY RANDOM() LIMIT 1")
@@ -298,7 +273,7 @@ class TestAPI(TestCase):
 
         headers = {
             "user_id": user['user_id'],
-            "session_key": session_key,
+            "session_key": user['session_key'],
             "tutorial_id": tutorial['tutorial_id']
         }
 
@@ -313,14 +288,7 @@ class TestAPI(TestCase):
         self.assertEqual(response.status_code, 200, "Result: " + response.data.decode('utf-8'))
 
     def test_delete_history(self):
-        self.cur.execute("Select * from \"User\" u ORDER BY RANDOM() LIMIT 1")
-        user = self.cur.fetchone()
-        session_key = uuid.uuid4()
-        if user['session_key'] is None:
-            self.cur.execute("UPDATE \"User\" SET session_key = %s WHERE user_id = %s", (str(session_key), user['user_id']))
-            self.conn.commit()
-        else:
-            session_key = user['session_key']
+        user = self._get_random_user()
 
         #Tutorial to delete selected randomly
         self.cur.execute("Select tutorial_id from Tutorials ORDER BY RANDOM() LIMIT 1")
@@ -338,7 +306,7 @@ class TestAPI(TestCase):
 
         headers = {
             "user_id": user['user_id'],
-            "session_key": session_key,
+            "session_key": user['session_key'],
             "tutorial_id": tutorial['tutorial_id']
         }
 
@@ -356,16 +324,26 @@ class TestAPI(TestCase):
 
     #region Search Testing
 
-    def test_search_query(self):
+    def test_query_string_title(self):
         user = self._get_random_user()
+        tutorial = self._get_tutorial()
+
+        #cutting of the first and last character of the tutorial title
+        title_query = tutorial['title'][1:-1]
 
         headers = {
             "user_id": user['user_id'],
             "session_key": user['session_key'],
+            "query": title_query
         }
 
-        response = self.client.get('/api/SearchQuery', headers=headers)
+        response = self.client.get('/api/QueryString', headers=headers)
         self.assertEqual(response.status_code, 200, "Result: " + response.data.decode('utf-8'))
+
+        if response.status_code == 200:
+            self._test_tutorial_json(response.json)
+
+
 
 
     #endregion

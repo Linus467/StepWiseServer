@@ -1,3 +1,4 @@
+from flask import jsonify
 from psycopg2.extras import RealDictCursor
 
 def fetch_and_format_user(cur, user_id):
@@ -166,3 +167,83 @@ def fetch_and_format_ratings(cur, tutorial_id):
         "text": rating["text"]
     } for rating in ratings_raw]
     return ratings
+
+def fetch_and_format_tutorial(cur, tutorial_id):
+    tutorial_data = []
+    cur.execute("""
+            SELECT
+                t.tutorial_id,
+                t.title,
+                t.tutorial_kind,
+                u.user_id,
+                u.firstname,
+                u.lastname,
+                u.email,
+                u.creator,
+                t.time,
+                t.difficulty,
+                t.complete,
+                t.description,
+                t.preview_picture_link,
+                t.preview_type,
+                t.views,
+                t.steps
+            FROM Tutorials t
+            INNER JOIN "User" u ON t.user_id = u.user_id
+            WHERE t.tutorial_id = %s
+        """, (tutorial_id,))
+    tutorial_data = cur.fetchone()
+
+    if not tutorial_data:
+        return None
+
+    # Fetching Extra Data
+    # Fetch Materials
+    materials = fetch_and_format_materials(cur, tutorial_id)
+    # Fetch Tools
+    tools = fetch_and_format_tools(cur, tutorial_id)
+    # Fetch Steps
+    steps = fetch_and_format_steps(cur, tutorial_id)
+    # Fetch Ratings
+    ratings = fetch_and_format_ratings(cur, tutorial_id)
+    
+    # Construct the final tutorial_data dictionary with all related data included
+    tutorial_data = {
+        "id": tutorial_data["tutorial_id"],
+        "title": tutorial_data["title"],
+        "tutorialKind": tutorial_data["tutorial_kind"],
+        "user": {
+            "id": tutorial_data["user_id"],
+            "firstName": tutorial_data["firstname"],
+            "lastName": tutorial_data["lastname"],
+            "email": tutorial_data["email"],
+            "isCreator": tutorial_data["creator"]
+        },
+        "time": tutorial_data["time"],
+        "difficulty": tutorial_data["difficulty"],
+        "completed": tutorial_data["complete"],
+        "descriptionText": tutorial_data["description"],
+        "previewPictureLink": tutorial_data["preview_picture_link"],
+        "previewType": tutorial_data["preview_type"],
+        "views": tutorial_data["views"],
+        "steps": steps,
+        "materials": materials,
+        "tools": tools,
+        "ratings": ratings
+    }
+
+    return tutorial_data
+
+
+def fetch_and_format_tutorials(cur, tutorial_ids = []):
+    tutorials = []
+    cur.execute("""
+                SELECT tutorial_id 
+                FROM Tutorials t
+                where t.tutorial_id in %s
+                """,(tutorial_ids,))
+    for tutorial_id in tutorial_ids:
+        tutorial = fetch_and_format_tutorial(cur, tutorial_id)
+        if tutorial:
+            tutorials.append(tutorial)
+    return tutorials

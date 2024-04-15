@@ -8,7 +8,7 @@ from psycopg2.extras import RealDictCursor
 from functools import wraps
 import pdb
 from helpers import (fetch_and_format_materials, fetch_and_format_tools, 
-                    fetch_and_format_steps, fetch_and_format_ratings, fetch_and_format_user)
+                    fetch_and_format_steps, fetch_and_format_ratings, fetch_and_format_user, fetch_and_format_tutorial, fetch_and_format_tutorials)
 from werkzeug.security import check_password_hash, generate_password_hash
 import uuid
 import json
@@ -126,68 +126,9 @@ def create_app(test_config=None):
             return jsonify({"error": error_message}), 400
 
         try:
-            cur.execute("""
-                SELECT
-                    t.tutorial_id,
-                    t.title,
-                    t.tutorial_kind,
-                    u.user_id,
-                    u.firstname,
-                    u.lastname,
-                    u.email,
-                    u.creator,
-                    t.time,
-                    t.difficulty,
-                    t.complete,
-                    t.description,
-                    t.preview_picture_link,
-                    t.preview_type,
-                    t.views,
-                    t.steps
-                FROM Tutorials t
-                INNER JOIN "User" u ON t.user_id = u.user_id
-                WHERE t.tutorial_id = %s
-            """, (tutorial_id,))
-            tutorial_data = cur.fetchone()
-
+            tutorial_data = fetch_and_format_tutorial(cur, tutorial_id)
             if not tutorial_data:
                 return jsonify({"error": "Tutorial not found"}), 404
-
-            # Fetching Extra Data
-            # Fetch Materials
-            materials = fetch_and_format_materials(cur, tutorial_id)
-            # Fetch Tools
-            tools = fetch_and_format_tools(cur, tutorial_id)
-            # Fetch Steps
-            steps = fetch_and_format_steps(cur, tutorial_id)
-            # Fetch Ratings
-            ratings = fetch_and_format_ratings(cur, tutorial_id)
-            
-            # Construct the final tutorial_data dictionary with all related data included
-            tutorial_data = {
-                "id": tutorial_data["tutorial_id"],
-                "title": tutorial_data["title"],
-                "tutorialKind": tutorial_data["tutorial_kind"],
-                "user": {
-                    "id": tutorial_data["user_id"],
-                    "firstName": tutorial_data["firstname"],
-                    "lastName": tutorial_data["lastname"],
-                    "email": tutorial_data["email"],
-                    "isCreator": tutorial_data["creator"]
-                },
-                "time": tutorial_data["time"],
-                "difficulty": tutorial_data["difficulty"],
-                "completed": tutorial_data["complete"],
-                "descriptionText": tutorial_data["description"],
-                "previewPictureLink": tutorial_data["preview_picture_link"],
-                "previewType": tutorial_data["preview_type"],
-                "views": tutorial_data["views"],
-                "steps": steps,
-                "materials": materials,
-                "tools": tools,
-                "ratings": ratings
-            }
-
         finally:
             cur.close()
             conn.close()
@@ -235,19 +176,14 @@ def create_app(test_config=None):
                 tools = fetch_and_format_tools(cur, tutorial_id)
                 steps = fetch_and_format_steps(cur, tutorial_id)
                 ratings = fetch_and_format_ratings(cur, tutorial_id)
+                user = fetch_and_format_user(cur, tutorial_data['user_id'])
                 
                 # Add the fetched data to the tutorial_data dictionary
                 tutorials_data.append({
                     "id": tutorial_data["tutorial_id"],
                     "title": tutorial_data["title"],
                     "tutorialKind": tutorial_data["tutorial_kind"],
-                    "user": {
-                        "id": tutorial_data["user_id"],
-                        "firstName": tutorial_data["firstname"],
-                        "lastName": tutorial_data["lastname"],
-                        "email": tutorial_data["email"],
-                        "isCreator": tutorial_data["creator"]
-                    },
+                    "user": user,
                     "time": tutorial_data["time"],
                     "difficulty": tutorial_data["difficulty"],
                     "completed": tutorial_data["complete"],
@@ -317,10 +253,10 @@ def create_app(test_config=None):
 
         return jsonify({"success": True}), 200
 
-
     #endregion
 
     #region Account
+    
     @app.route("/api/change_password", methods=["POST"])
     @require_auth
     def change_password():
@@ -510,9 +446,11 @@ def create_app(test_config=None):
         finally:
             cur.close()
             conn.close()
+    
     #endregion
 
     #region History
+
     @app.route("/api/GetHistoryList", methods=["GET"])
     @require_auth
     def get_history_list():
@@ -633,31 +571,83 @@ def create_app(test_config=None):
         cur.close()
         conn.close()
         return jsonify({"success": True}), 200
+    
     #endregion
 
     #region Search
+
     @app.route("/api/QueryString", methods=["GET"])
     def query_string():
-        query = request.args.get('Query')
+        query = request.headers.get('query')
         if not query:
             return jsonify({"error": "Query parameter is required"}), 400
 
         conn = get_db_connection()
         cur = conn.cursor()
-        # Useing ILIKE for case-insensitive search and % for wildcard matching
+        # Using ILIKE for case-insensitive search and % for wildcard matching
         search_query = f"%{query}%"
-        cur.execute("""
-            SELECT * FROM Tutorials
-            WHERE title ILIKE %s OR description ILIKE %s
-        """, (search_query, search_query))
-        tutorials = cur.fetchall()
-        cur.close()
-        conn.close()
+        try:
+            cur.execute("""
+                SELECT
+                    t.tutorial_id,
+                    t.title,
+                    t.tutorial_kind,
+                    t.description,
+                    t.preview_picture_link,
+                    t.preview_type,
+                    t.views,
+                    t.steps,
+                    u.user_id,
+                    u.firstname,
+                    u.lastname,
+                    u.email,
+                    u.creator,
+                    t.time,
+                    t.difficulty,
+                    t.complete
+                FROM Tutorials t
+                JOIN "User" u ON t.user_id = u.user_id
+                WHERE t.title ILIKE %s OR t.description ILIKE %s
+            """, (search_query, search_query))
+            fetched_tutorials = cur.fetchall()
 
-        if tutorials:
-            return jsonify(tutorials), 200
-        else:
-            return jsonify({"message": "No tutorials found matching the query"}), 404
+            if not fetched_tutorials:
+                return jsonify({"message": "No tutorials found matching the query"}), 404
+
+            # Formatting each tutorial with detailed information
+            tutorials_output = []
+            for tutorial_data in fetched_tutorials:
+                # Fetch materials, tools, steps, ratings etc.
+                materials = fetch_and_format_materials(cur, tutorial_data['tutorial_id'])
+                tools = fetch_and_format_tools(cur, tutorial_data['tutorial_id'])
+                steps = fetch_and_format_steps(cur, tutorial_data['tutorial_id'])
+                ratings = fetch_and_format_ratings(cur, tutorial_data['tutorial_id'])
+                user = fetch_and_format_user(cur, tutorial_data['user_id'])
+
+                tutorials_output.append({
+                    "id": tutorial_data["tutorial_id"],
+                    "title": tutorial_data["title"],
+                    "tutorialKind": tutorial_data["tutorial_kind"],
+                    "user": user,
+                    "time": tutorial_data["time"],
+                    "difficulty": tutorial_data["difficulty"],
+                    "completed": tutorial_data["complete"],
+                    "descriptionText": tutorial_data["description"],
+                    "previewPictureLink": tutorial_data["preview_picture_link"],
+                    "previewType": tutorial_data["preview_type"],
+                    "views": tutorial_data["views"],
+                    "steps": steps,
+                    "materials": materials,
+                    "tools": tools,
+                    "ratings": ratings
+                })
+
+            return jsonify(tutorials_output), 200
+
+        finally:
+            cur.close()
+            conn.close()
+    
     #endregion
 
     #region Favorites
