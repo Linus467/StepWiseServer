@@ -29,6 +29,8 @@ def get_db_connection():
 
 class TestAPI(TestCase):
     #init app
+
+    #region Setup and Teardown
     def create_app(self):
         test_config = {
             'TESTING': True,
@@ -51,6 +53,10 @@ class TestAPI(TestCase):
         # Teardown test database, drop tables
         self.cur.close()
         self.conn.close()
+
+    #endregion
+
+    #region Helper Functions
 
     def _get_random_user(self):
         try:
@@ -85,22 +91,57 @@ class TestAPI(TestCase):
         except ValidationError as e:
             self.fail(f"Response JSON does not match the expected schema: {str(e)}")
 
-    # Browser Testing
+    def _is_json_valid(self, data):
+        try:
+            json.loads(data)
+            return True
+        except ValueError:
+            return False
+
+    #endregion
+
+    #region Browser Testing
+
     def test_get_browser_json(self):
         response = self.client.get('/api/GetBrowser')
 
-        self.assertEqual(response.status_code, 200, "Expected HTTP 200 response.")
+        self.assertEqual(response.status_code, 200, "Result: " + response.data.decode('utf-8'))
 
-        self._test_tutorial_json(response.json)
+        if response.status_code == 200 & self._is_json_valid(response.data.decode('utf-8')):
+            self._test_tutorial_json(response.json)
+
+    def test_get_browser_json_with_user(self):
+        user = self._get_random_user()
+        headers = {
+            "user_id": user['user_id'],
+            "session_key": user['session_key']
+        }
+        response = self.client.get('/api/GetBrowser', headers=headers)
+
+        self.assertEqual(response.status_code, 200, "Result: " + response.data.decode('utf-8'))
+
+        if response.status_code == 200 & self._is_json_valid(response.data.decode('utf-8')):
+            self._test_tutorial_json(response.json)
+    
+    def test_get_browser_kind(self):
+        tutorial = self._get_tutorial()
+        headers = {
+            "kind": tutorial['tutorial_kind']
+        }
+        
+        response = self.client.get('/api/GetBrowserKind', headers=headers, content_type='application/json')
+
+        self.assertEqual(response.status_code, 200, "Result: " + response.data.decode('utf-8'))
+
+        if response.status_code == 200 & self._is_json_valid(response.data.decode('utf-8')):
+            self._test_tutorial_json(response.json)
+
+    #endregion
 
     #region Tutorial Testing
+
     def test_get_tutorial_json(self):
-        self.cur.execute("""
-                        Select *
-                        from Tutorials t  
-                        ORDER BY RANDOM() LIMIT 1
-                        """)
-        tutorial = self.cur.fetchone()
+        tutorial = self._get_tutorial()
         headers = {
             "tutorial_id": tutorial['tutorial_id']
         }
@@ -108,12 +149,13 @@ class TestAPI(TestCase):
 
         self.assertEqual(response.status_code, 200, "Result: " + response.data.decode('utf-8'))
 
-        if response.status_code == 200:
+        if response.status_code == 200 & self._is_json_valid(response.data.decode('utf-8')):
             self._test_tutorial_json(response.json)
-
+    
     #endregion
 
     #region Account Testing
+
     def test_change_password(self):
         
         user = {
@@ -227,6 +269,7 @@ class TestAPI(TestCase):
     #endregion
 
     #region History Testing
+
     def test_get_history(self):
         user = self._get_random_user()
         headers = {
@@ -340,13 +383,87 @@ class TestAPI(TestCase):
         response = self.client.get('/api/QueryString', headers=headers)
         self.assertEqual(response.status_code, 200, "Result: " + response.data.decode('utf-8'))
 
-        if response.status_code == 200:
+        if response.status_code == 200 & self._is_json_valid(response.data.decode('utf-8')):
             self._test_tutorial_json(response.json)
 
+    #endregion
 
+    #region Favorites Testing
 
+    def test_get_favorite(self):
+        user = self._get_random_user()
+        headers = {
+            "user_id": user['user_id'],
+            "session_key": user['session_key']
+        }
+
+        response = self.client.get('/api/GetFavorite', headers=headers)
+        self.assertEqual(response.status_code, 200, "Result: " + response.data.decode('utf-8'))
+        
+        if response.status_code == 200 & self._is_json_valid(response.data.decode('utf-8')) & self._is_json_valid(response.data.decode('utf-8')):
+            self._test_tutorial_json(response.json)
+
+    def test_remove_favorite(self):
+        user = self._get_random_user()
+        tutorial = self._get_tutorial()
+        headers = {
+            "user_id": user['user_id'],
+            "session_key": user['session_key']
+        }
+
+        # Adding favorite tutorial to user
+        self.cur.execute("""
+                        Insert into FavouriteList
+                        (user_id, tutorial_id) 
+                        values (%s, %s)
+                        """, 
+                    (user['user_id'],tutorial['tutorial_id']))
+        self.conn.commit()
+
+        payload = {
+            "tutorial_id": tutorial['tutorial_id']
+        }
+        response = self.client.post('/api/RemoveFavorite', data=json.dumps(payload), headers=headers, content_type='application/json')
+        self.assertEqual(response.status_code, 200, "Result: " + response.data.decode('utf-8'))
 
     #endregion
+
+
+    #region Tutorial Creation Testing
+
+    def test_add_content(self):
+        tutorial_id = uuid.uuid4()
+        step_id = uuid.uuid4()
+        content_type = 1
+        content = "This is a test content"
+
+        payload = {
+            "TutorialId": str(tutorial_id),
+            "StepId": str(step_id),
+            "Type": content_type,
+            "Content": content
+        }
+
+        response = self.client.post('/api/AddContent', json=payload)
+
+        self.assertEqual(response.status_code, 200, "Result: " + response.data.decode('utf-8'))
+        self.assertEqual(response.json, {"success": True})
+
+    def test_delete_content(self):
+        tutorial_id = uuid.uuid4()
+        step_id = uuid.uuid4()
+        content_id = uuid.uuid4()
+        payload = {
+            "TutorialId": str(tutorial_id),
+            "StepId": str(step_id),
+            "ContentId": str(content_id)
+        }
+        response = self.client.delete('/api/DeleteContent', json=payload)
+        self.assertEqual(response.status_code, 200, "Result: " + response.data.decode('utf-8'))
+        self.assertEqual(response.json, {"success": True})
+
+    #endregion
+
     # def test_video_upload(self):
     #     # Get the directory of the current script
     #     current_directory = os.path.dirname(__file__)

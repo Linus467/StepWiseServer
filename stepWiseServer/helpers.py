@@ -235,15 +235,43 @@ def fetch_and_format_tutorial(cur, tutorial_id):
     return tutorial_data
 
 
-def fetch_and_format_tutorials(cur, tutorial_ids = []):
-    tutorials = []
-    cur.execute("""
-                SELECT tutorial_id 
-                FROM Tutorials t
-                where t.tutorial_id in %s
-                """,(tutorial_ids,))
-    for tutorial_id in tutorial_ids:
-        tutorial = fetch_and_format_tutorial(cur, tutorial_id)
-        if tutorial:
-            tutorials.append(tutorial)
-    return tutorials
+def fetch_and_format_tutorials(cur, tutorials_data):
+    tutorials_formatted = []
+
+    if not tutorials_data:
+        return None
+
+    for tutorial in tutorials_data:
+        tutorial_id = tutorial["tutorial_id"]
+        
+        # Fetch Materials
+        materials = fetch_and_format_materials(cur, tutorial_id)
+        # Fetch Tools
+        tools = fetch_and_format_tools(cur, tutorial_id)
+        # Fetch Steps
+        steps = fetch_and_format_steps(cur, tutorial_id)
+        # Fetch Ratings
+        ratings = fetch_and_format_ratings(cur, tutorial_id)
+        # Fetch User
+        user = fetch_and_format_user(cur, tutorial["user_id"])
+
+        tutorial_data = {
+            "id": tutorial["tutorial_id"],
+            "title": tutorial["title"],
+            "tutorialKind": tutorial["tutorial_kind"],
+            "user": user,
+            "time": tutorial["time"],
+            "difficulty": tutorial["difficulty"],
+            "completed": tutorial["complete"],
+            "descriptionText": tutorial["description"],
+            "previewPictureLink": tutorial["preview_picture_link"],
+            "previewType": tutorial["preview_type"],
+            "views": tutorial["views"],
+            "steps": steps,
+            "materials": materials,
+            "tools": tools,
+            "ratings": ratings
+        }
+        tutorials_formatted.append(tutorial_data)
+        
+    return tutorials_formatted

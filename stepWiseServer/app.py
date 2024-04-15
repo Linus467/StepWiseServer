@@ -7,8 +7,10 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 from functools import wraps
 import pdb
-from helpers import (fetch_and_format_materials, fetch_and_format_tools, 
-                    fetch_and_format_steps, fetch_and_format_ratings, fetch_and_format_user, fetch_and_format_tutorial, fetch_and_format_tutorials)
+#get all methods from helpers 
+from helpers import (fetch_and_format_user, fetch_and_format_materials, fetch_and_format_tools,
+                    fetch_and_format_steps, fetch_and_format_ratings,
+                    fetch_and_format_tutorial, fetch_and_format_tutorials)
 from werkzeug.security import check_password_hash, generate_password_hash
 import uuid
 import json
@@ -102,6 +104,24 @@ def create_app(test_config=None):
             return f(*args, **kwargs)
         return decorated_function
     
+    def require_isCreator_ofTutorial(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            user_id = request.headers.get('UserId')
+            tutorial_id = request.headers.get('TutorialId')
+            # Check if the user is the creator of the tutorial
+            conn = get_db_connection()
+            cur = conn.cursor()
+            cur.execute("SELECT user_id FROM Tutorials WHERE tutorial_id = %s", (tutorial_id,))
+            tutorial_creator = cur.fetchone()
+            # If the user is not the creator of the tutorial, return an error response
+            if not tutorial_creator or tutorial_creator['user_id'] != user_id:
+                return jsonify({"error": "User is not the creator of the tutorial"}), 403
+            cur.close()
+            conn.close()
+            return f(*args, **kwargs)
+        return decorated_function
+
     #email check
     def check_email(email):
         if re.match(r"[^@]+@[^@]+\.[^@]+", email):
@@ -115,6 +135,7 @@ def create_app(test_config=None):
         return jsonify({"message" : "Hello StepWise!"})
     
     #region Tutorial
+
     @app.route("/api/tutorial/id/", methods=["GET"])
     def get_tutorial(): 
         conn = get_db_connection()
@@ -135,77 +156,6 @@ def create_app(test_config=None):
 
         return jsonify([tutorial_data])
 
-    @app.route("/api/tutorial_kind", methods=["GET"])
-    def get_tutorials():
-        conn = get_db_connection()
-        cur = conn.cursor()
-        tutorial_kind = request.args.get('tutorial_kind') 
-        tutorials_data = []
-
-        try:
-            if tutorial_kind:
-                cur.execute("""
-                    SELECT
-                        t.tutorial_id,
-                        t.title,
-                        t.tutorial_kind,
-                        u.user_id,
-                        u.firstname,
-                        u.lastname,
-                        u.email,
-                        u.creator,
-                        t.time,
-                        t.difficulty,
-                        t.complete,
-                        t.description,
-                        t.preview_picture_link,
-                        t.preview_type,
-                        t.views,
-                        t.steps
-                    FROM Tutorials t
-                    INNER JOIN "User" u ON t.user_id = u.user_id
-                    WHERE t.tutorial_kind = %s
-                """, (tutorial_kind,))
-            else:
-                return jsonify({"error": "Tutorial kind not received"}), 404
-            
-            for tutorial_data in cur.fetchall():
-                # For each tutorial, fetch additional data like materials, tools, steps, and ratings
-                tutorial_id = tutorial_data['tutorial_id']
-                materials = fetch_and_format_materials(cur, tutorial_id)
-                tools = fetch_and_format_tools(cur, tutorial_id)
-                steps = fetch_and_format_steps(cur, tutorial_id)
-                ratings = fetch_and_format_ratings(cur, tutorial_id)
-                user = fetch_and_format_user(cur, tutorial_data['user_id'])
-                
-                # Add the fetched data to the tutorial_data dictionary
-                tutorials_data.append({
-                    "id": tutorial_data["tutorial_id"],
-                    "title": tutorial_data["title"],
-                    "tutorialKind": tutorial_data["tutorial_kind"],
-                    "user": user,
-                    "time": tutorial_data["time"],
-                    "difficulty": tutorial_data["difficulty"],
-                    "completed": tutorial_data["complete"],
-                    "description": tutorial_data["description"],
-                    "previewPictureLink": tutorial_data["preview_picture_link"],
-                    "previewType": tutorial_data["preview_type"],
-                    "views": tutorial_data["views"],
-                    "steps": steps,
-                    "materials": materials,
-                    "tools": tools,
-                    "ratings": ratings
-                })
-            # Return the list of tutorials
-            if(tutorial_data.count() == 0):
-                return jsonify({"error": "No tutorials found"}), 404
-
-        # close DB connection
-        finally:
-            cur.close()
-            conn.close()
-
-        return jsonify(tutorials_data)
 
     @app.route("/api/Rating", methods=["POST"])
     @require_auth
@@ -609,38 +559,8 @@ def create_app(test_config=None):
                 JOIN "User" u ON t.user_id = u.user_id
                 WHERE t.title ILIKE %s OR t.description ILIKE %s
             """, (search_query, search_query))
-            fetched_tutorials = cur.fetchall()
-
-            if not fetched_tutorials:
-                return jsonify({"message": "No tutorials found matching the query"}), 404
-
-            # Formatting each tutorial with detailed information
             tutorials_output = []
-            for tutorial_data in fetched_tutorials:
-                # Fetch materials, tools, steps, ratings etc.
-                materials = fetch_and_format_materials(cur, tutorial_data['tutorial_id'])
-                tools = fetch_and_format_tools(cur, tutorial_data['tutorial_id'])
-                steps = fetch_and_format_steps(cur, tutorial_data['tutorial_id'])
-                ratings = fetch_and_format_ratings(cur, tutorial_data['tutorial_id'])
-                user = fetch_and_format_user(cur, tutorial_data['user_id'])
-
-                tutorials_output.append({
-                    "id": tutorial_data["tutorial_id"],
-                    "title": tutorial_data["title"],
-                    "tutorialKind": tutorial_data["tutorial_kind"],
-                    "user": user,
-                    "time": tutorial_data["time"],
-                    "difficulty": tutorial_data["difficulty"],
-                    "completed": tutorial_data["complete"],
-                    "descriptionText": tutorial_data["description"],
-                    "previewPictureLink": tutorial_data["preview_picture_link"],
-                    "previewType": tutorial_data["preview_type"],
-                    "views": tutorial_data["views"],
-                    "steps": steps,
-                    "materials": materials,
-                    "tools": tools,
-                    "ratings": ratings
-                })
+            fetch_and_format_tutorials(cur, cur.fetchall())
 
             return jsonify(tutorials_output), 200
 
@@ -651,16 +571,19 @@ def create_app(test_config=None):
     #endregion
 
     #region Favorites
+
     @app.route("/api/GetFavorite", methods=["GET"])
     @require_auth
     def get_favorite():
-        user_id = g.user_id
+        user_id = request.headers.get("user_id")
 
         conn = get_db_connection()
         cur = conn.cursor()
         cur.execute("""
-            SELECT t.* FROM Tutorials t
-            JOIN FavouriteList f ON t.tutorial_id = f.tutorial_id
+            SELECT t.*, u.* 
+            FROM Tutorials t
+            INNER JOIN "User" u ON u.user_id = t.user_id
+            INNER JOIN FavouriteList f ON t.tutorial_id = f.tutorial_id
             WHERE f.user_id = %s
         """, (user_id,))
         favorite_tutorials = cur.fetchall()
@@ -672,8 +595,8 @@ def create_app(test_config=None):
     @require_auth
     def remove_favorite():
         data = request.json
-        user_id = g.user_id
-        tutorial_id = data.get('TutorialId')
+        tutorial_id = data.get("tutorial_id")
+        user_id = request.headers.get("user_id")
         
         if not all([user_id, tutorial_id]):
             return jsonify({"error": "Missing required parameters"}), 400
@@ -695,6 +618,7 @@ def create_app(test_config=None):
         conn.close()
 
         return jsonify({"success": success}), 200 if success else 404
+    
     #endregion
 
     #region Browser
@@ -725,129 +649,73 @@ def create_app(test_config=None):
                     INNER JOIN "User" u ON t.user_id = u.user_id
                     ORDER BY RANDOM() LIMIT 10
                 """,)
-            
-            tutorials_raw = cur.fetchall()
-            tutorials_formatted = []
-
-            for tutorial in tutorials_raw:
-                tutorial_id = tutorial["tutorial_id"]
-                
-                # Fetch Materials
-                materials = fetch_and_format_materials(cur, tutorial_id)
-                # Fetch Tools
-                tools = fetch_and_format_tools(cur, tutorial_id)
-                # Fetch Steps
-                steps = fetch_and_format_steps(cur, tutorial_id)
-                # Fetch Ratings
-                ratings = fetch_and_format_ratings(cur, tutorial_id)
-                # Fetch User
-                user = fetch_and_format_user(cur, tutorial["user_id"])
-
-                tutorial_data = {
-                    "id": tutorial["tutorial_id"],
-                    "title": tutorial["title"],
-                    "tutorialKind": tutorial["tutorial_kind"],
-                    "user": user,
-                    "time": tutorial["time"],
-                    "difficulty": tutorial["difficulty"],
-                    "completed": tutorial["complete"],
-                    "descriptionText": tutorial["description"],
-                    "previewPictureLink": tutorial["preview_picture_link"],
-                    "previewType": tutorial["preview_type"],
-                    "views": tutorial["views"],
-                    "steps": steps,
-                    "materials": materials,
-                    "tools": tools,
-                    "ratings": ratings
-                }
-
-                tutorials_formatted.append(tutorial_data)
+            tutorials_formatted = fetch_and_format_tutorials(cur,cur.fetchall())
+            if not tutorials_formatted:
+                return jsonify({"message": "No tutorials found"}), 404
         except Exception as e:
             print(f"An error occurred: {e}")
-            return jsonify({"error": "Database error: {e}"}), 500
+            return jsonify({"error": f"Database error: {e}"}), 500
         finally:
             cur.close()
             conn.close()
 
         return jsonify(tutorials_formatted), 200
 
-
     @app.route("/api/GetBrowserKind", methods=["GET"])
-    def get_tutorial_kind():
+    def get_browser_kind():
         kind = request.headers.get('kind')
         if not kind:
             return jsonify({"error": "Kind parameter is required"}), 400
-
-        conn = get_db_connection()
-        cur = conn.cursor()
-        # Adjusted to fetch 10 random tutorials of the specified kind
-        cur.execute("""
-                SELECT
-                    t.tutorial_id,
-                    t.title,
-                    t.tutorial_kind,
-                    u.user_id,
-                    u.firstname,
-                    u.lastname,
-                    u.email,
-                    u.creator,
-                    t.time,
-                    t.difficulty,
-                    t.complete,
-                    t.description,
-                    t.preview_picture_link,
-                    t.preview_type,
-                    t.views,
-                    t.steps
-                FROM Tutorials t
-                INNER JOIN "User" u ON t.user_id = u.user_id
-                WHERE tutorial_kind = %s 
-                ORDER BY RANDOM() LIMIT 10
-            """,(kind,))
-        
-        tutorials_raw = cur.fetchall()
-        tutorials_formatted = []
-
-        for tutorial in tutorials_raw:
-            tutorial_id = tutorial["tutorial_id"]
+        try:
+            conn = get_db_connection()
+            cur = conn.cursor()
+            # Adjusted to fetch 10 random tutorials of the specified kind
+            cur.execute("""
+                    SELECT
+                        t.tutorial_id,
+                        t.title,
+                        t.tutorial_kind,
+                        u.user_id,
+                        u.firstname,
+                        u.lastname,
+                        u.email,
+                        u.creator,
+                        t.time,
+                        t.difficulty,
+                        t.complete,
+                        t.description,
+                        t.preview_picture_link,
+                        t.preview_type,
+                        t.views,
+                        t.steps
+                    FROM Tutorials t
+                    INNER JOIN "User" u ON t.user_id = u.user_id
+                    WHERE tutorial_kind = %s 
+                    ORDER BY RANDOM() LIMIT 10
+                """,(kind,))
             
-            # Fetching Extra Data for each tutorial
-            materials = fetch_and_format_materials(cur, tutorial_id)
-            tools = fetch_and_format_tools(cur, tutorial_id)
-            steps = fetch_and_format_steps(cur, tutorial_id)
-            ratings = fetch_and_format_ratings(cur, tutorial_id)
-            user = fetch_and_format_user(cur, tutorial["user_id"])
-
-            tutorial_data = {
-                "id": tutorial["tutorial_id"],
-                "title": tutorial["title"],
-                "tutorialKind": tutorial["tutorial_kind"],
-                "user": user,
-                "time": tutorial["time"],
-                "difficulty": tutorial["difficulty"],
-                "completed": tutorial["complete"],
-                "description": tutorial["description"],
-                "previewPictureLink": tutorial["preview_picture_link"],
-                "previewType": tutorial["preview_type"],
-                "views": tutorial["views"],
-                "steps": steps,
-                "materials": materials,
-                "tools": tools,
-                "ratings": ratings
-            }
-
-            tutorials_formatted.append(tutorial_data)
-
-        cur.close()
-        conn.close()
-
-        return jsonify(tutorials_formatted), 200 if tutorials_formatted else jsonify({"message": "No tutorials found for the specified kind"}), 404
+            tutorials_formatted = fetch_and_format_tutorials(cur, cur.fetchall())
+            
+        except Exception as e:
+            print(f"An error occurred: {e}")
+            return jsonify({"error": f"Database error: {e}"}), 500
+        finally:
+            cur.close()
+            conn.close()
+        if not tutorials_formatted:
+            return jsonify({"message": "No tutorials found for the specified kind"}), 404
+        return jsonify(tutorials_formatted), 200
 
     #endregion
 
+############################################################################################################
+
     #region tutorialCreation
+
+    #region content
+
     @app.route("/api/AddContent", methods=["POST"])
-    @require_isCreator
+    @require_isCreator_ofTutorial
     @require_auth
     def add_content():
         data = request.json
@@ -905,8 +773,66 @@ def create_app(test_config=None):
 
         return jsonify({"success": True}), 200
 
+    @app.route("/api/DeleteContent", methods=["DELETE"])
+    @require_isCreator_ofTutorial
+    @require_auth
+    def delete_content():
+        data = request.json
+        tutorial_id = data.get('TutorialId')
+        step_id = data.get('StepId')
+        content_id = data.get('ContentId')
+
+        if not all([tutorial_id, step_id, content_id]):
+            return jsonify({"error": "Missing required fields"}), 400
+
+        try:
+            conn = get_db_connection()
+            cur = conn.cursor()
+
+            # Fetch the content type
+            cur.execute("""
+                SELECT content_type FROM SubSteps
+                WHERE sub_step_id = (
+                    SELECT sub_step_id FROM SubStepsList
+                    WHERE step_id = %s AND sub_step_id = %s
+                )
+            """, (step_id, content_id))
+            content_type = cur.fetchone()
+            if not content_type:
+                return jsonify({"error": "Content not found"}), 404
+
+            # Dynamically select table based on content_type
+            if content_type == 1:
+                table_name = "TextContent"
+            elif content_type == 2:
+                table_name = "PictureContent"
+            elif content_type == 3:
+                table_name = "VideoContent"
+            else:
+                return jsonify({"error": "Invalid content type"}), 400
+
+            # Delete the content from the selected table
+            cur.execute(f"""
+                DELETE FROM {table_name}
+                WHERE id = %s
+            """, (content_id,))
+            conn.commit()
+
+        except Exception as e:
+            print(f"An error occurred: {e}")
+            return jsonify({"error": "Database error"}), 500
+        finally:
+            cur.close()
+            conn.close()
+
+        return jsonify({"success": True}), 200
+
+    #endregion
+
+    #region step
+
     @app.route("/api/AddStep", methods=["POST"])
-    @require_isCreator
+    @require_isCreator_ofTutorial
     @require_auth
     def add_step():
         data = request.json
@@ -937,8 +863,43 @@ def create_app(test_config=None):
 
         return jsonify({"success": True}), 200
 
+    @app.route("/api/DeleteStep", methods=["DELETE"])
+    @require_isCreator_ofTutorial
+    @require_auth
+    def delete_step():
+        data = request.json
+        tutorial_id = data.get('TutorialId')
+        step_id = data.get('StepId')
+
+        if not all([tutorial_id, step_id]):
+            return jsonify({"error": "Missing required fields"}), 400
+
+        try:
+            conn = get_db_connection()
+            cur = conn.cursor()
+
+            # Delete the step from the Steps table
+            cur.execute("""
+                DELETE FROM Steps
+                WHERE tutorial_id = %s AND step_id = %s
+            """, (tutorial_id, step_id))
+            conn.commit()
+
+        except Exception as e:
+            print(f"An error occurred: {e}")
+            return jsonify({"error": "Database error"}), 500
+        finally:
+            cur.close()
+            conn.close()
+
+        return jsonify({"success": True}), 200
+
+    #endregion
+
+    #region tutorial
+
     @app.route("/api/AddTutorial", methods=["POST"])
-    @require_isCreator
+    @require_isCreator_ofTutorial
     @require_auth
     def add_tutorial():
         data = request.json
@@ -968,15 +929,45 @@ def create_app(test_config=None):
             return jsonify({"success": True, "tutorial_id": str(tutorial_id)}), 200
 
         except Exception as e:
-            print(f"An error occurred: {e}")
             return jsonify({"error": "Database error"}), 500
 
         finally:
             if cur: cur.close()
             if conn: conn.close()
 
+    @app.route("/api/DeleteTutorial", methods=["DELETE"])
+    @require_isCreator_ofTutorial
+    @require_auth
+    def delete_tutorial():
+        data = request.json
+        tutorial_id = data.get('TutorialId')
+
+        if not tutorial_id:
+            return jsonify({"error": "Missing required fields"}), 400
+        try:
+            conn = get_db_connection()
+            cur = conn.cursor()
+
+            # Delete the tutorial from the Tutorials table
+            cur.execute("""
+                DELETE FROM Tutorials
+                WHERE tutorial_id = %s
+            """, (tutorial_id,))
+            conn.commit()
+
+        except Exception as e:
+            return jsonify({"error": "Database error"}), 500
+        finally:
+            cur.close()
+            conn.close()
+
+        return jsonify({"success": True}), 200
+    #endregion
+
+    #region material
+
     @app.route("/api/AddMaterial", methods=["POST"])
-    @require_isCreator
+    @require_isCreator_ofTutorial
     @require_auth
     def add_material():
         data = request.json
@@ -1010,8 +1001,43 @@ def create_app(test_config=None):
 
         return jsonify({"success": True}), 200
 
+    @app.route("/api/DeleteMaterial", methods=["DELETE"])
+    @require_isCreator_ofTutorial
+    @require_auth
+    def delete_material():
+        data = request.json
+        tutorial_id = data.get('TutorialId')
+        title = data.get('Title')
+
+        if not all([tutorial_id, title]):
+            return jsonify({"error": "Missing required fields"}), 400
+
+        try:
+            conn = get_db_connection()
+            cur = conn.cursor()
+
+            # Delete the material from the Material table
+            cur.execute("""
+                DELETE FROM Material
+                WHERE tutorial_id = %s AND mat_title = %s
+            """, (tutorial_id, title))
+            conn.commit()
+
+        except Exception as e:
+            print(f"An error occurred: {e}")
+            return jsonify({"error": "Database error"}), 500
+        finally:
+            cur.close()
+            conn.close()
+
+        return jsonify({"success": True}), 200
+
+    #endregion
+
+    #region tool
+
     @app.route("/api/AddTool", methods=["POST"])
-    @require_isCreator
+    @require_isCreator_ofTutorial
     @require_auth
     def add_tool():
         data = request.json
@@ -1044,13 +1070,17 @@ def create_app(test_config=None):
 
         return jsonify({"success": True}), 200
 
+    #endregion
+
+    #region searchLink
+
     @app.route("/api/AddSearchLink", methods=["POST"])
-    @require_isCreator
+    @require_isCreator_ofTutorial
     @require_auth
     def add_search_link():
         data = request.json
-        tutorial_id = data.get('TutorialId')
-        link = data.get('Link')
+        tutorial_id = data.get('tutorial_id')
+        link = data.get('link')
 
         if not all([tutorial_id, link]):
             return jsonify({"error": "Missing required fields"}), 400
@@ -1074,6 +1104,39 @@ def create_app(test_config=None):
             conn.close()
 
         return jsonify({"success": True}), 200
+
+    @app.route("/api/DeleteSearchLink", methods=["DELETE"])
+    @require_isCreator_ofTutorial
+    @require_auth
+    def delete_search_link():
+        data = request.json
+        tutorial_id = data.get('tutorial_id')
+        link = data.get('link')
+
+        if not all([tutorial_id, link]):
+            return jsonify({"error": "Missing required fields"}), 400
+
+        try:
+            conn = get_db_connection()
+            cur = conn.cursor()
+
+            # Delete the search link from the SearchLinks table
+            cur.execute("""
+                DELETE FROM SearchLinks
+                WHERE tutorial_id = %s AND link = %s
+            """, (tutorial_id, link))
+            conn.commit()
+
+        except Exception as e:
+            print(f"An error occurred: {e}")
+            return jsonify({"error": "Database error"}), 500
+        finally:
+            cur.close()
+            conn.close()
+
+        return jsonify({"success": True}), 200
+
+    #endregion
 
     #endregion
 
