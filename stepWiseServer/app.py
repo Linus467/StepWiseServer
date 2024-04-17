@@ -90,14 +90,16 @@ def create_app(test_config=None):
     def require_isCreator(f):
         @wraps(f)
         def decorated_function(*args, **kwargs):
-            user_id = request.headers.get('UserId')
+            user_id = request.headers.get('user_id')
             # Check if the user is a creator
             conn = get_db_connection()
             cur = conn.cursor()
             cur.execute("SELECT creator FROM \"User\" WHERE user_id = %s", (user_id,))
             user = cur.fetchone()
             # If the user is not a creator, return an error response
-            if not user or not user['creator']:
+            if not user:
+                return jsonify({"error": "No User found"}), 403
+            if user['creator'] == False :
                 return jsonify({"error": "User is not a creator"}), 403
             cur.close()
             conn.close()
@@ -107,15 +109,17 @@ def create_app(test_config=None):
     def require_isCreator_ofTutorial(f):
         @wraps(f)
         def decorated_function(*args, **kwargs):
-            user_id = request.headers.get('UserId')
-            tutorial_id = request.headers.get('TutorialId')
+            user_id = request.headers.get('user_id')
+            tutorial_id = request.headers.get('tutorial_id')
             # Check if the user is the creator of the tutorial
             conn = get_db_connection()
             cur = conn.cursor()
             cur.execute("SELECT user_id FROM Tutorials WHERE tutorial_id = %s", (tutorial_id,))
             tutorial_creator = cur.fetchone()
             # If the user is not the creator of the tutorial, return an error response
-            if not tutorial_creator or tutorial_creator['user_id'] != user_id:
+            if not tutorial_creator:
+                return jsonify({"error": "No User found"}), 403
+            if tutorial_creator['user_id'] != user_id:
                 return jsonify({"error": "User is not the creator of the tutorial"}), 403
             cur.close()
             conn.close()
@@ -195,7 +199,6 @@ def create_app(test_config=None):
             conn.commit()
 
         except Exception as e:
-            print(f"An error occurred: {e}")
             return jsonify({"error": "Database error"}), 500
         finally:
             cur.close()
@@ -216,8 +219,6 @@ def create_app(test_config=None):
         currentPW = data.get('currentPW')
         newPW = data.get('newPW')
         
-        if test_config:
-            print("Test config is set", data, user_id, currentPW, newPW)
         # Check if all required parameters are present
         if not all([currentPW, newPW]):
             return jsonify({"error": "Missing required parameters"}), 400
@@ -247,7 +248,6 @@ def create_app(test_config=None):
             success = True
                 
         except Exception as e:
-            print(f"An error occurred: {e}")
             success = False
         finally:
             cur.close()
@@ -351,7 +351,6 @@ def create_app(test_config=None):
         conn = get_db_connection()
         cur = conn.cursor()
         #getting the user in the correct format
-        print("user_id:", user_id)
         user = fetch_and_format_user(cur, user_id)
         cur.close()
         conn.close()
@@ -653,7 +652,6 @@ def create_app(test_config=None):
             if not tutorials_formatted:
                 return jsonify({"message": "No tutorials found"}), 404
         except Exception as e:
-            print(f"An error occurred: {e}")
             return jsonify({"error": f"Database error: {e}"}), 500
         finally:
             cur.close()
@@ -697,7 +695,6 @@ def create_app(test_config=None):
             tutorials_formatted = fetch_and_format_tutorials(cur, cur.fetchall())
             
         except Exception as e:
-            print(f"An error occurred: {e}")
             return jsonify({"error": f"Database error: {e}"}), 500
         finally:
             cur.close()
@@ -719,10 +716,10 @@ def create_app(test_config=None):
     @require_auth
     def add_content():
         data = request.json
-        tutorial_id = data.get('TutorialId')
-        step_id = data.get('StepId')
-        content_type = data.get('Type')  # 1 for TextContent, 2 for PictureContent, 3 for VideoContent
-        content = data.get('Content')
+        tutorial_id = data.get('tutorial_id')
+        step_id = data.get('step_id')
+        content_type = data.get('type')  # 1 for TextContent, 2 for PictureContent, 3 for VideoContent
+        content = data.get('content')
 
         if not all([tutorial_id, step_id, content_type, content]):
             return jsonify({"error": "Missing required fields"}), 400
@@ -749,24 +746,23 @@ def create_app(test_config=None):
             cur.execute(f"""
                 INSERT INTO {table_name} (id, {column_name})
                 VALUES (%s, %s)
-            """, (uuid.uuid4(), content))
+            """, (str(uuid.uuid4()), content))
             sub_step_id = uuid.uuid4()
             # Insert a corresponding record into SubSteps table
             cur.execute("""
                 INSERT INTO SubSteps (sub_step_id, content_type, content_id)
                 VALUES (%s, %s, %s)
-            """, (sub_step_id, content_type, content_id))
+            """, (str(sub_step_id), content_type, str(content_id)))
 
             # Insert a record into SubStepsList table
             cur.execute("""
                 INSERT INTO SubStepsList (sub_step_list_id, sub_step_id, step_id)
                 VALUES (%s, %s, %s)
-            """, (uuid.uuid4(), sub_step_id ,step_id))
+            """, (str(uuid.uuid4()), str(sub_step_id) ,str(step_id)))
             conn.commit()
 
         except Exception as e:
-            print(f"An error occurred: {e}")
-            return jsonify({"error": "Database error"}), 500
+            return jsonify({"error": f"Database error: {e}"}), 500
         finally:
             cur.close()
             conn.close()
@@ -777,10 +773,9 @@ def create_app(test_config=None):
     @require_isCreator_ofTutorial
     @require_auth
     def delete_content():
-        data = request.json
-        tutorial_id = data.get('TutorialId')
-        step_id = data.get('StepId')
-        content_id = data.get('ContentId')
+        tutorial_id = request.headers.get('tutorial_id')
+        step_id = request.headers.get('step_id')
+        content_id = request.headers.get('content_id')
 
         if not all([tutorial_id, step_id, content_id]):
             return jsonify({"error": "Missing required fields"}), 400
@@ -791,15 +786,12 @@ def create_app(test_config=None):
 
             # Fetch the content type
             cur.execute("""
-                SELECT content_type FROM SubSteps
-                WHERE sub_step_id = (
-                    SELECT sub_step_id FROM SubStepsList
-                    WHERE step_id = %s AND sub_step_id = %s
-                )
-            """, (step_id, content_id))
-            content_type = cur.fetchone()
+                SELECT content_type FROM SubSteps st
+                WHERE st.content_id = %s
+            """,  (content_id,))
+            content_type = cur.fetchone()['content_type']
             if not content_type:
-                return jsonify({"error": "Content not found"}), 404
+                return jsonify({"error": f"Content not found for contentid:{content_id}"}), 404
 
             # Dynamically select table based on content_type
             if content_type == 1:
@@ -809,7 +801,7 @@ def create_app(test_config=None):
             elif content_type == 3:
                 table_name = "VideoContent"
             else:
-                return jsonify({"error": "Invalid content type"}), 400
+                return jsonify({"error": f"Invalid content type content_type: {content_type}"}), 400
 
             # Delete the content from the selected table
             cur.execute(f"""
@@ -819,8 +811,7 @@ def create_app(test_config=None):
             conn.commit()
 
         except Exception as e:
-            print(f"An error occurred: {e}")
-            return jsonify({"error": "Database error"}), 500
+            return jsonify({"error": f"Database error {e}"}), 500
         finally:
             cur.close()
             conn.close()
@@ -836,8 +827,8 @@ def create_app(test_config=None):
     @require_auth
     def add_step():
         data = request.json
-        tutorial_id = data.get('TutorialId')
-        title = data.get('Title')
+        tutorial_id = data.get('tutorial_id')
+        title = data.get('title')
 
         if not all([tutorial_id, title]):
             return jsonify({"error": "Missing required fields"}), 400
@@ -851,12 +842,11 @@ def create_app(test_config=None):
             cur.execute("""
                 INSERT INTO Steps (step_id, tutorial_id, title)
                 VALUES (%s, %s, %s)
-            """, (step_id, tutorial_id, title))
+            """, (str(step_id), str(tutorial_id), title))
             conn.commit()
 
         except Exception as e:
-            print(f"An error occurred: {e}")
-            return jsonify({"error": "Database error"}), 500
+            return jsonify({"error": f"Database error {e}"}), 500
         finally:
             cur.close()
             conn.close()
@@ -868,8 +858,8 @@ def create_app(test_config=None):
     @require_auth
     def delete_step():
         data = request.json
-        tutorial_id = data.get('TutorialId')
-        step_id = data.get('StepId')
+        tutorial_id = data.get('tutorial_id')
+        step_id = data.get('step_id')
 
         if not all([tutorial_id, step_id]):
             return jsonify({"error": "Missing required fields"}), 400
@@ -878,16 +868,21 @@ def create_app(test_config=None):
             conn = get_db_connection()
             cur = conn.cursor()
 
+
+            # Delete all usercomments from step
+            cur.execute("""
+                DELETE FROM usercomments
+                WHERE step_id = %s
+                        """,(str(step_id),))
             # Delete the step from the Steps table
             cur.execute("""
                 DELETE FROM Steps
                 WHERE tutorial_id = %s AND step_id = %s
-            """, (tutorial_id, step_id))
+            """, (str(tutorial_id), str(step_id)))
             conn.commit()
 
         except Exception as e:
-            print(f"An error occurred: {e}")
-            return jsonify({"error": "Database error"}), 500
+            return jsonify({"error": f"Database error {e}"}), 500
         finally:
             cur.close()
             conn.close()
@@ -899,18 +894,18 @@ def create_app(test_config=None):
     #region tutorial
 
     @app.route("/api/AddTutorial", methods=["POST"])
-    @require_isCreator_ofTutorial
+    @require_isCreator
     @require_auth
     def add_tutorial():
         data = request.json
-        user_id = g.user_id
-        title = data.get('Title')
-        tutorial_kind = data.get('Kind')
-        time = data.get('Time')
-        difficulty = data.get('Difficulty')
-        description = data.get('Description')
-        preview_picture_link = data.get('PreviewPictureLink')
-        preview_type = data.get('PreviewType')
+        user_id = request.headers.get('user_id')
+        title = data.get('title')
+        tutorial_kind = data.get('kind')
+        time = data.get('time')
+        difficulty = data.get('difficulty')
+        description = data.get('description')
+        preview_picture_link = data.get('previewPictureLink')
+        preview_type = data.get('previewType')
 
         if not all([user_id, title, tutorial_kind, time, difficulty, description, preview_picture_link, preview_type]):
             return jsonify({"error": "Missing required fields"}), 400
@@ -922,14 +917,17 @@ def create_app(test_config=None):
             tutorial_id = uuid.uuid4()
             # Insert the new tutorial into the Tutorials table
             cur.execute("""
-                INSERT INTO Tutorials (tutorial_id, title, tutorial_kind, user_id, time, difficulty, complete, description, preview_picture_link, preview_type, views, steps)
+                INSERT INTO Tutorials (tutorial_id, title, tutorial_kind,
+                        user_id, time, difficulty, complete, description,
+                        preview_picture_link, preview_type, views, steps)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 0, 0)
-            """, (tutorial_id, title, tutorial_kind, user_id, time, difficulty, False, description, preview_picture_link, preview_type))
+            """, (str(tutorial_id), title, tutorial_kind, str(user_id),
+                time, difficulty, False, description, preview_picture_link, preview_type))
             conn.commit()
             return jsonify({"success": True, "tutorial_id": str(tutorial_id)}), 200
 
         except Exception as e:
-            return jsonify({"error": "Database error"}), 500
+            return jsonify({"error": f"Database error{e}"}), 500
 
         finally:
             if cur: cur.close()
@@ -940,7 +938,7 @@ def create_app(test_config=None):
     @require_auth
     def delete_tutorial():
         data = request.json
-        tutorial_id = data.get('TutorialId')
+        tutorial_id = data.get('tutorial_id')
 
         if not tutorial_id:
             return jsonify({"error": "Missing required fields"}), 400
@@ -962,6 +960,7 @@ def create_app(test_config=None):
             conn.close()
 
         return jsonify({"success": True}), 200
+    
     #endregion
 
     #region material
@@ -989,12 +988,11 @@ def create_app(test_config=None):
             cur.execute("""
                 INSERT INTO Material (material_id, tutorial_id, mat_title, mat_amount, mat_price, link)
                 VALUES (%s, %s, %s, %s, %s, %s)
-            """, (material_id, tutorial_id, title, amount, price, link))
+            """, (str(material_id), str(tutorial_id), title, amount, price, link))
             conn.commit()
 
         except Exception as e:
-            print(f"An error occurred: {e}")
-            return jsonify({"error": "Database error"}), 500
+            return jsonify({"error": f"Database error: {e}"}), 500
         finally:
             cur.close()
             conn.close()
@@ -1006,10 +1004,10 @@ def create_app(test_config=None):
     @require_auth
     def delete_material():
         data = request.json
-        tutorial_id = data.get('TutorialId')
-        title = data.get('Title')
+        tutorial_id = data.get('tutorial_id')
+        material_id = data.get('material_id')
 
-        if not all([tutorial_id, title]):
+        if not all([tutorial_id, material_id]):
             return jsonify({"error": "Missing required fields"}), 400
 
         try:
@@ -1019,12 +1017,11 @@ def create_app(test_config=None):
             # Delete the material from the Material table
             cur.execute("""
                 DELETE FROM Material
-                WHERE tutorial_id = %s AND mat_title = %s
-            """, (tutorial_id, title))
+                WHERE tutorial_id = %s AND material_id = %s
+            """, (str(tutorial_id), str(material_id)))
             conn.commit()
 
         except Exception as e:
-            print(f"An error occurred: {e}")
             return jsonify({"error": "Database error"}), 500
         finally:
             cur.close()
@@ -1041,10 +1038,11 @@ def create_app(test_config=None):
     @require_auth
     def add_tool():
         data = request.json
-        tutorial_id = data.get('TutorialId')
-        title = data.get('Title')
-        amount = data.get('Amount')
-        link = data.get('Link')
+        tutorial_id = data.get('tutorial_id')
+        title = data.get('title')
+        amount = data.get('amount')
+        link = data.get('link')
+        price = data.get('price')
 
         if not all([tutorial_id, title, amount, link]):
             return jsonify({"error": "Missing required fields"}), 400
@@ -1056,20 +1054,49 @@ def create_app(test_config=None):
             tool_id = uuid.uuid4()
             # Insert the new tool into the Tools table
             cur.execute("""
-                INSERT INTO Tools (tool_id, tutorial_id, tool_title, tool_amount, link)
-                VALUES (%s, %s, %s, %s, %s)
-            """, (tool_id, tutorial_id, title, amount, link))
+                INSERT INTO Tools (tool_id, tutorial_id, tool_title, tool_amount, tool_price, link) 
+                VALUES (%s, %s, %s, %s, %s, %s)
+            """, (str(tool_id), str(tutorial_id), title, amount, price, link))
             conn.commit()
 
         except Exception as e:
-            print(f"An error occurred: {e}")
-            return jsonify({"error": "Database error"}), 500
+            return jsonify({"error": f"Database error: {e}"}), 500
         finally:
             cur.close()
             conn.close()
 
         return jsonify({"success": True}), 200
 
+    @app.route("/api/DeleteTool", methods=["DELETE"])
+    @require_isCreator_ofTutorial
+    @require_auth
+    def delete_tool():
+        data = request.json
+        tutorial_id = data.get('tutorial_id')
+        tool_id = data.get('tool_id')
+
+        if not all([tutorial_id, tool_id]):
+            return jsonify({"error": "Missing required fields"}), 400
+
+        try:
+            conn = get_db_connection()
+            cur = conn.cursor()
+
+            # Delete the tool from the Tools table
+            cur.execute("""
+                DELETE FROM Tools
+                WHERE tutorial_id = %s AND tool_id = %s
+            """, (str(tutorial_id), str(tool_id)))
+            conn.commit()
+
+        except Exception as e:
+            return jsonify({"error": "Database error"}), 500
+        finally:
+            cur.close()
+            conn.close()
+
+        return jsonify({"success": True}), 200
+    
     #endregion
 
     #region searchLink
@@ -1091,14 +1118,13 @@ def create_app(test_config=None):
 
             # Insert the new search link into the SearchLinks table
             cur.execute("""
-                INSERT INTO SearchLinks (tutorial_id, link)
-                VALUES (%s, %s)
-            """, (tutorial_id, link))
+                INSERT INTO tutorialSearchLinks (tutorial_id, search_link_id, name_link)
+                VALUES (%s, %s, %s)
+            """, (str(tutorial_id),str(uuid.uuid4()), link))
             conn.commit()
 
         except Exception as e:
-            print(f"An error occurred: {e}")
-            return jsonify({"error": "Database error"}), 500
+            return jsonify({"error": f"Database error: {e}"}), 500
         finally:
             cur.close()
             conn.close()
@@ -1111,9 +1137,9 @@ def create_app(test_config=None):
     def delete_search_link():
         data = request.json
         tutorial_id = data.get('tutorial_id')
-        link = data.get('link')
+        search_link_id = data.get('search_link_id')
 
-        if not all([tutorial_id, link]):
+        if not all([tutorial_id, search_link_id]):
             return jsonify({"error": "Missing required fields"}), 400
 
         try:
@@ -1122,14 +1148,14 @@ def create_app(test_config=None):
 
             # Delete the search link from the SearchLinks table
             cur.execute("""
-                DELETE FROM SearchLinks
-                WHERE tutorial_id = %s AND link = %s
-            """, (tutorial_id, link))
+                DELETE FROM tutorialSearchLinks
+                WHERE tutorial_id = %s AND search_link_id = %s
+            """, (str(tutorial_id), search_link_id))
             conn.commit()
 
         except Exception as e:
             print(f"An error occurred: {e}")
-            return jsonify({"error": "Database error"}), 500
+            return jsonify({"error": f"Database error: {e}"}), 500
         finally:
             cur.close()
             conn.close()

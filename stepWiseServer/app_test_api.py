@@ -58,8 +58,18 @@ class TestAPI(TestCase):
 
     #region Helper Functions
 
-    def _get_random_user(self):
+    def _get_user(self, user_id = None):
         try:
+            if user_id is not None:
+                self.cur.execute("Select * from \"User\" u WHERE u.user_id = %s", (user_id,))
+                user = self.cur.fetchone()
+                if user['session_key'] is None:
+                    self.cur.execute("UPDATE \"User\" SET session_key = %s WHERE user_id = %s", (str(session_key), user['user_id']))
+                    self.conn.commit()
+                    user['session_key'] = session_key
+                return user
+            
+            # Get random user when no user_id is provided
             self.cur.execute("Select * from \"User\" u ORDER BY RANDOM() LIMIT 1")
             user = self.cur.fetchone()
             session_key = uuid.uuid4()
@@ -71,12 +81,25 @@ class TestAPI(TestCase):
         except Exception as e:
             self.fail("Error getting random user: " + str(e))
 
+    def _get_creator_user(self):
+        try:
+            self.cur.execute("Select * from \"User\" u WHERE u.creator = True ORDER BY RANDOM() LIMIT 1")
+            user = self.cur.fetchone()
+            session_key = uuid.uuid4()
+            if user['session_key'] is None:
+                self.cur.execute("UPDATE \"User\" SET session_key = %s WHERE user_id = %s", (str(session_key), user['user_id']))
+                self.conn.commit()
+                user['session_key'] = session_key
+            return user
+        except Exception as e:
+            self.fail("Error getting random creator user: " + str(e))
+
     def _get_tutorial(self, user_id = None):
         try:
             if user_id is None:
                 self.cur.execute("Select * from Tutorials t ORDER BY RANDOM() LIMIT 1")
             else:
-                self.cur.execute("Select * from Tutorials t WHERE t.user_id = %s LIMIT 1", (user_id,))
+                self.cur.execute("Select * from Tutorials t WHERE t.user_id = %s LIMIT 1", (str(user_id),))
             tutorial = self.cur.fetchone()
             return tutorial
         except Exception as e:
@@ -98,6 +121,48 @@ class TestAPI(TestCase):
         except ValueError:
             return False
 
+    def _get_step_from_tutorial(self, tutorial_id):
+        self.cur.execute("SELECT * FROM Steps WHERE tutorial_id = %s ORDER BY RANDOM() LIMIT 1", (str(tutorial_id),))
+        step = self.cur.fetchone()
+        return step
+    
+    def  _get_step(self, step_id):
+        self.cur.execute("SELECT * FROM Steps WHERE step_id = %s", (str(step_id),))
+        step = self.cur.fetchone()
+        return step
+
+    def _get_substeps(self, step_id):
+        self.cur.execute("SELECT * FROM SubstepsList WHERE step_id = %s", (step_id,))
+        substeps = self.cur.fetchall()
+        substeps_output =[]
+
+        for substep in substeps:
+            self.cur.execute("SELECT * FROM Substeps WHERE sub_step_id = %s", (substep['sub_step_id'],))
+            substeps_output.append(self.cur.fetchall())
+
+        return substeps_output
+    
+    def _get_content(self, content_id):
+        try:
+            self.cur.execute("SELECT * FROM TextContent WHERE content_id = %s", (content_id,))
+            content = self.cur.fetchone()
+            
+            if content is None:
+                self.cur.execute("SELECT * FROM VideoContent WHERE content_id = %s", (content_id,))
+                content = self.cur.fetchone()
+            
+            if content is None:
+                self.cur.execute("SELECT * FROM PictureContent WHERE content_id = %s", (content_id,))
+                content = self.cur.fetchone()
+            
+            if content is None:
+                self.fail("Content not found")
+            return content
+        except Exception as e:
+            self.fail("Error getting content: " + str(e))
+    
+
+
     #endregion
 
     #region Browser Testing
@@ -111,7 +176,7 @@ class TestAPI(TestCase):
             self._test_tutorial_json(response.json)
 
     def test_get_browser_json_with_user(self):
-        user = self._get_random_user()
+        user = self._get_user()
         headers = {
             "user_id": user['user_id'],
             "session_key": user['session_key']
@@ -271,7 +336,7 @@ class TestAPI(TestCase):
     #region History Testing
 
     def test_get_history(self):
-        user = self._get_random_user()
+        user = self._get_user()
         headers = {
             "user_id": user['user_id'],
             "session_key": user['session_key']
@@ -298,7 +363,7 @@ class TestAPI(TestCase):
             self._test_tutorial_json(response.json)
     
     def test_delete_history_single(self):
-        user = self._get_random_user()
+        user = self._get_user()
 
         #Tutorial to delete selected randomly
         self.cur.execute("Select tutorial_id from Tutorials ORDER BY RANDOM() LIMIT 1")
@@ -331,7 +396,7 @@ class TestAPI(TestCase):
         self.assertEqual(response.status_code, 200, "Result: " + response.data.decode('utf-8'))
 
     def test_delete_history(self):
-        user = self._get_random_user()
+        user = self._get_user()
 
         #Tutorial to delete selected randomly
         self.cur.execute("Select tutorial_id from Tutorials ORDER BY RANDOM() LIMIT 1")
@@ -368,7 +433,7 @@ class TestAPI(TestCase):
     #region Search Testing
 
     def test_query_string_title(self):
-        user = self._get_random_user()
+        user = self._get_user()
         tutorial = self._get_tutorial()
 
         #cutting of the first and last character of the tutorial title
@@ -391,7 +456,7 @@ class TestAPI(TestCase):
     #region Favorites Testing
 
     def test_get_favorite(self):
-        user = self._get_random_user()
+        user = self._get_user()
         headers = {
             "user_id": user['user_id'],
             "session_key": user['session_key']
@@ -404,7 +469,7 @@ class TestAPI(TestCase):
             self._test_tutorial_json(response.json)
 
     def test_remove_favorite(self):
-        user = self._get_random_user()
+        user = self._get_user()
         tutorial = self._get_tutorial()
         headers = {
             "user_id": user['user_id'],
@@ -428,39 +493,370 @@ class TestAPI(TestCase):
 
     #endregion
 
-
     #region Tutorial Creation Testing
 
+    #region Content Testing
     def test_add_content(self):
-        tutorial_id = uuid.uuid4()
-        step_id = uuid.uuid4()
-        content_type = 1
-        content = "This is a test content"
+        #finding a tutorial with a step
+        step = None
+        while step is None:
+            tutorial = self._get_tutorial()
+            user = self._get_user(tutorial['user_id'])
+            step = self._get_step_from_tutorial(tutorial['tutorial_id'])
 
+        content_type = 1 # Text content type
+        content = "This is a test content12312 " + str(uuid.uuid4())
         payload = {
-            "TutorialId": str(tutorial_id),
-            "StepId": str(step_id),
-            "Type": content_type,
-            "Content": content
+            "tutorial_id": tutorial['tutorial_id'],
+            "step_id": step['step_id'],
+            "type": content_type,
+            "content": content
         }
 
-        response = self.client.post('/api/AddContent', json=payload)
+        headers = {
+            "user_id": user['user_id'],
+            "session_key": user['session_key'],
+            "tutorial_id": tutorial['tutorial_id']
+        }
+
+        response = self.client.post('/api/AddContent', json=payload, headers=headers)
 
         self.assertEqual(response.status_code, 200, "Result: " + response.data.decode('utf-8'))
         self.assertEqual(response.json, {"success": True})
+
+        self.cur.execute("SELECT * FROM TextContent WHERE content_text = %s", (content,))
+        text_content = self.cur.fetchone()
+        self.assertIsNotNone(text_content, "Text content not found in database")
 
     def test_delete_content(self):
-        tutorial_id = uuid.uuid4()
-        step_id = uuid.uuid4()
+        #finding a tutorial with a step
+        step = None
+        while step is None: 
+            tutorial = self._get_tutorial()
+            user = self._get_user(tutorial['user_id'])
+            step = self._get_step_from_tutorial(tutorial['tutorial_id'])
+        
+        # Create a new content to delete
         content_id = uuid.uuid4()
-        payload = {
-            "TutorialId": str(tutorial_id),
-            "StepId": str(step_id),
-            "ContentId": str(content_id)
+        substep_id = uuid.uuid4()
+        self.cur.execute("""Insert into TextContent (id, content_text)
+                        values (%s, %s)"""
+                        , (str(content_id), "This is a test content12312"))
+        # add to the substeps
+        self.cur.execute("""Insert into substeps 
+                        (sub_step_id, content_id, content_type) 
+                        values (%s, %s, 1)"""
+                    ,(str(substep_id), str(content_id)))
+        self.cur.execute("""Insert into substepsList 
+                        (step_id, sub_step_id, sub_step_list_id) 
+                        values (%s, %s, %s)"""
+                    ,(str(step['step_id']),str(substep_id), str(uuid.uuid4())))
+        self.conn.commit()
+
+        #get payload ready to send
+        headers = {
+            "user_id": user['user_id'],
+            "session_key": user['session_key'],
+            "tutorial_id": tutorial['tutorial_id'],
+            "step_id": step['step_id'],
+            "content_id": content_id
         }
-        response = self.client.delete('/api/DeleteContent', json=payload)
+        response = self.client.delete('/api/DeleteContent', headers=headers)
         self.assertEqual(response.status_code, 200, "Result: " + response.data.decode('utf-8'))
         self.assertEqual(response.json, {"success": True})
+
+        self.cur.execute("SELECT content_text FROM TextContent WHERE id = %s", (str(content_id),))
+        text_content = self.cur.fetchone()
+        self.assertIsNone(text_content, "Text content not deleted")
+
+    #endregion
+
+    #region Step Testing
+
+    def test_add_step(self):
+        tutorial = self._get_tutorial()
+        user = self._get_user(tutorial['user_id'])
+        title = "Test Step"
+
+        payload = {
+            "tutorial_id": tutorial['tutorial_id'],
+            "title": title
+        }
+        headers = {
+            "user_id": user['user_id'],
+            "session_key": user['session_key'],
+            "tutorial_id": tutorial['tutorial_id']
+        }
+        response = self.client.post('/api/AddStep', json=payload, headers=headers)
+        self.assertEqual(response.status_code, 200, "Result: " + response.data.decode('utf-8'))
+        self.assertEqual(response.json, {"success": True})
+        self.cur.execute("SELECT * FROM Steps WHERE tutorial_id = %s AND title = %s", (tutorial['tutorial_id'], title))
+        step = self.cur.fetchone()
+        self.assertIsNotNone(step, "Step not found in database")
+
+    def test_delete_step(self):
+        tutorial = self._get_tutorial()
+        user = self._get_user(tutorial['user_id'])
+        step_id = uuid.uuid4()
+
+        #inserting step to delete
+        self.cur.execute("""Insert into steps
+                        (step_id, tutorial_id, title) values (%s, %s, %s)""",
+                    (str(step_id), str(tutorial['tutorial_id']), "Test Step"))
+        #add comment to step
+        self.cur.execute("""Insert into userComments
+                        (user_id, comment_id, step_id, text) values (%s, %s, %s, %s)""",
+                    (str(user['user_id']), str(uuid.uuid4()), str(step_id), "This is a test comment"))
+        self.conn.commit()
+
+        step = self._get_step(step_id)
+        payload = {
+            "tutorial_id": tutorial['tutorial_id'],
+            "step_id": step['step_id']
+        }
+        headers = {
+            "user_id": user['user_id'],
+            "session_key": user['session_key'],
+            "tutorial_id": tutorial['tutorial_id']
+        }
+        response = self.client.delete('/api/DeleteStep', json=payload, headers=headers)
+        self.assertEqual(response.status_code, 200, "Result: " + response.data.decode('utf-8'))
+        self.assertEqual(response.json, {"success": True})
+        # Check if the step was deleted from the database
+        self.cur.execute("SELECT * FROM Steps WHERE tutorial_id = %s AND step_id = %s", (tutorial['tutorial_id'], str(step_id)))
+        deleted_step = self.cur.fetchone()
+        self.assertIsNone(deleted_step, "Step not deleted from database")
+
+    #endregion
+
+    #region Tutorial Testing
+
+    def test_add_tutorial(self):
+        user = self._get_creator_user()
+        title = "Test Tutorial"
+        tutorial_kind = "Python"
+        time = 60
+        difficulty = 3
+        description = "This is a test tutorial"
+        preview_picture_link = "https://example.com/image.jpg"
+        preview_type = "image/jpeg"
+        payload = {
+            "title": title,
+            "kind": tutorial_kind,
+            "time": time,
+            "difficulty": difficulty,
+            "description": description,
+            "previewPictureLink": preview_picture_link,
+            "previewType": preview_type
+        }
+        headers = {
+            "user_id": user['user_id'],
+            "session_key": user['session_key']
+        }
+        response = self.client.post('/api/AddTutorial', json=payload, headers=headers)
+        self.assertEqual(response.status_code, 200, "Result: " + response.data.decode('utf-8'))
+        self.cur.execute("SELECT * FROM Tutorials WHERE title = %s and description = %s", (title,description))
+        tutorial = self.cur.fetchone()
+        self.assertIsNotNone(tutorial, "Tutorial not found in database")
+        if tutorial is not None:
+            
+            self.cur.execute("""DELETE FROM Tutorials 
+                                WHERE tutorial_id = %s 
+                                AND NOT EXISTS (
+                                    SELECT 1 
+                                    FROM steps 
+                                    WHERE tutorial_id = %s
+                                )""", (tutorial['tutorial_id'],tutorial["tutorial_id"]))
+            self.conn.commit()
+
+    def test_delete_tutorial(self):
+        tutorial_id = uuid.uuid4()
+        user = self._get_creator_user()
+        self.cur.execute("""INSERT INTO Tutorials (tutorial_id, user_id, title, tutorial_kind, time,
+                        difficulty, description, preview_picture_link, preview_type) values (%s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                    (str(tutorial_id), str(user['user_id']),
+                    "Test Tutorial", "Python", 60, 3,
+                    "This is a test tutorial", "https://example.com/image.jpg", "image/jpeg"))
+        self.conn.commit()
+        tutorial = self._get_tutorial(tutorial_id)
+        payload = {
+            "tutorial_id": tutorial_id
+        }
+        headers = {
+            "user_id": user['user_id'],
+            "session_key": user['session_key'],
+            "tutorial_id": tutorial_id
+        }
+        response = self.client.delete('/api/DeleteTutorial', json=payload, headers=headers)
+        self.assertEqual(response.status_code, 200, "Result: " + response.data.decode('utf-8'))
+        self.assertEqual(response.json, {"success": True})
+        self.cur.execute("SELECT * FROM Tutorials WHERE tutorial_id = %s", (str(tutorial_id),))
+        deleted_tutorial = self.cur.fetchone()
+        self.assertIsNone(deleted_tutorial, "Tutorial not deleted from database")
+    #endregion 
+
+    #region material Testing
+
+    def test_add_material(self):
+        tutorial = self._get_tutorial()
+        user = self._get_user(tutorial['user_id'])
+        title = "Test Material"
+        amount = 10
+        price = 9.99
+        link = "https://example.com/material"
+        payload = {
+            "TutorialId": tutorial['tutorial_id'],
+            "Title": title,
+            "Amount": amount,
+            "Price": price,
+            "Link": link
+        }
+        headers = {
+            "user_id": user['user_id'],
+            "session_key": user['session_key'],
+            "tutorial_id": tutorial['tutorial_id']
+        }
+        response = self.client.post('/api/AddMaterial', json=payload, headers=headers)
+        self.assertEqual(response.status_code, 200, "Result: " + response.data.decode('utf-8'))
+        self.assertEqual(response.json, {"success": True})
+        self.cur.execute("SELECT * FROM Material WHERE tutorial_id = %s AND mat_title = %s",
+                            (str(tutorial['tutorial_id']), title))
+
+        material = self.cur.fetchone()
+        self.assertIsNotNone(material, "Material not found in database")
+
+    def test_delete_material(self):
+        tutorial = self._get_tutorial()
+        user = self._get_user(tutorial['user_id'])
+        material_id = uuid.uuid4()
+        self.cur.execute("""INSERT INTO Material 
+                        (material_id, tutorial_id, mat_title, mat_amount, mat_price, link ) values (%s, %s, %s, %s, %s, %s)""",
+                    (str(material_id) ,str(tutorial['tutorial_id']),
+                    "Test Material", 10, 9.99, "https://example.com/material"))
+        self.conn.commit()
+        payload = {
+            "tutorial_id": tutorial['tutorial_id'],
+            "material_id": material_id
+        }
+        headers = {
+            "user_id": user['user_id'],
+            "session_key": user['session_key'],
+            "tutorial_id": tutorial['tutorial_id']
+        }
+        response = self.client.delete('/api/DeleteMaterial', json=payload, headers=headers)
+        self.assertEqual(response.status_code, 200, "Result: " + response.data.decode('utf-8'))
+        self.assertEqual(response.json, {"success": True})
+
+        self.cur.execute("SELECT * FROM Material WHERE tutorial_id = %s AND material_id = %s", (str(tutorial['tutorial_id']), str(material_id)))
+        deleted_material = self.cur.fetchone()
+        self.assertIsNone(deleted_material, "Material not deleted from database")
+    
+    #endregion
+
+    #region tool Testing
+
+    def test_add_tool(self):
+        tutorial = self._get_tutorial()
+        user = self._get_user(tutorial['user_id'])
+        title = "Test Tool"
+        amount = 5
+        link = "https://example.com/tool"
+        price = 9.99 
+        payload = {
+            "tutorial_id": tutorial['tutorial_id'],
+            "title": title,
+            "amount": amount,
+            "link": link,
+            "price": price
+        }
+        headers = {
+            "user_id": user['user_id'],
+            "session_key": user['session_key'],
+            "tutorial_id": tutorial['tutorial_id']
+        }
+        response = self.client.post('/api/AddTool', json=payload, headers=headers)
+        self.assertEqual(response.status_code, 200, "Result: " + response.data.decode('utf-8'))
+        self.assertEqual(response.json, {"success": True})
+        self.cur.execute("SELECT * FROM Tools WHERE tutorial_id = %s AND tool_title = %s",
+                            (str(tutorial['tutorial_id']), title))
+        tool = self.cur.fetchone()
+        self.assertIsNotNone(tool, "Tool not found in database")
+
+    def test_delete_tool(self):
+        tutorial = self._get_tutorial()
+        user = self._get_user(tutorial['user_id'])
+        tool_id = uuid.uuid4()
+        self.cur.execute("""INSERT INTO Tools 
+                        (tool_id, tutorial_id, tool_title, tool_amount, link, tool_price) values (%s, %s, %s, %s, %s, %s)""",
+                    (str(tool_id) ,str(tutorial['tutorial_id']),
+                    "Test Tool", 5, "https://example.com/tool", 9.99))
+        self.conn.commit()
+        payload = {
+            "tutorial_id": tutorial['tutorial_id'],
+            "tool_id": tool_id
+        }
+        headers = {
+            "user_id": user['user_id'],
+            "session_key": user['session_key'],
+            "tutorial_id": tutorial['tutorial_id']
+        }
+        response = self.client.delete('/api/DeleteTool', json=payload, headers=headers)
+        self.assertEqual(response.status_code, 200, "Result: " + response.data.decode('utf-8'))
+        self.assertEqual(response.json, {"success": True})
+        self.cur.execute("SELECT * FROM Tools WHERE tutorial_id = %s AND tool_id = %s", (str(tutorial['tutorial_id']), str(tool_id)))
+        deleted_tool = self.cur.fetchone()
+        self.assertIsNone(deleted_tool, "Tool not deleted from database")
+
+    #endregion
+
+    #region Search Link Testing
+
+    def test_add_search_link(self):
+        tutorial = self._get_tutorial()
+        user = self._get_user(tutorial['user_id'])
+        link = "https://example.com/search"
+        payload = {
+            "tutorial_id": tutorial['tutorial_id'],
+            "link": link
+        }
+        headers = {
+            "user_id": user['user_id'],
+            "session_key": user['session_key'],
+            "tutorial_id": tutorial['tutorial_id']
+        }
+        response = self.client.post('/api/AddSearchLink', json=payload, headers=headers)
+        self.assertEqual(response.status_code, 200, "Result: " + response.data.decode('utf-8'))
+        self.assertEqual(response.json, {"success": True})
+        self.cur.execute("SELECT * FROM tutorialSearchLinks WHERE tutorial_id = %s AND name_link = %s",
+                            (str(tutorial['tutorial_id']), link))
+        search_link = self.cur.fetchone()
+        self.assertIsNotNone(search_link, "Search link not found in database")
+
+    def test_delete_search_link(self):
+        tutorial = self._get_tutorial()
+        user = self._get_user(tutorial['user_id'])
+        search_link_id = uuid.uuid4()
+        self.cur.execute("""INSERT INTO tutorialSearchLinks 
+                            (search_link_id, tutorial_id, name_link) values (%s, %s, %s)""",
+                        (str(search_link_id), str(tutorial['tutorial_id']), "https://example.com/search"))
+        self.conn.commit()
+        link = "https://example.com/search"
+        payload = {
+            "tutorial_id": tutorial['tutorial_id'],
+            "search_link_id": search_link_id
+        }
+        headers = {
+            "user_id": user['user_id'],
+            "session_key": user['session_key'],
+            "tutorial_id": tutorial['tutorial_id']
+        }
+        response = self.client.delete('/api/DeleteSearchLink', json=payload, headers=headers)
+        self.assertEqual(response.status_code, 200, "Result: " + response.data.decode('utf-8'))
+        self.assertEqual(response.json, {"success": True})
+        self.cur.execute("SELECT * FROM tutorialSearchLinks WHERE tutorial_id = %s AND search_link_id = %s",
+                            (str(tutorial['tutorial_id']), str(search_link_id)))
+        deleted_search_link = self.cur.fetchone()
+        self.assertIsNone(deleted_search_link, "Search link not deleted from database")
 
     #endregion
 
@@ -478,7 +874,7 @@ class TestAPI(TestCase):
 
     #     self.assertEqual(response.status_code, 200, "Result: " + response.data.decode('utf-8'))
 
-    # # def test_picture_upload(self):
+    # #def test_picture_upload(self):
     #     # Get the directory of the current script
     #     current_directory = os.path.dirname(__file__)
     #     # Construct the path to the MP4 file relative to the current script
