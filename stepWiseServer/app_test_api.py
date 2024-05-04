@@ -40,7 +40,8 @@ class TestAPI(TestCase):
             'DATABASE_PASSWORD': "2NPLCP@89!to",
             'DATABASE_HOST': "127.0.0.1",
             'DATABASE_PORT': "5433",
-            'TEST_ENVIRONMENT': 'True'
+            'TEST_ENVIRONMENT': 'True',
+            'S3_DATA_BUCKET_URL': 'http://127.0.0.1:9000'
         }
         app = create_app(test_config)
         return app
@@ -860,33 +861,33 @@ class TestAPI(TestCase):
 
     #endregion
 
-    # def test_video_upload(self):
-    #     # Get the directory of the current script
-    #     current_directory = os.path.dirname(__file__)
-    #     # Construct the path to the MP4 file relative to the current script
-    #     file_path = os.path.join(current_directory, 'IMG_2696.MP4')
+    def test_video_upload(self):
+        # Get the directory of the current script
+        current_directory = os.path.dirname(__file__)
+        # Construct the path to the MP4 file relative to the current script
+        file_path = os.path.join(current_directory, 'IMG_2696.MP4')
 
-    #     with open(file_path, 'rb') as mp4:
-    #         data = {
-    #             'file': (mp4, 'IMG_2696.MP4')
-    #         }
-    #         response = self.client.post('/api/VideoUpload', content_type='multipart/form-data', data=data)
+        with open(file_path, 'rb') as mp4:
+            data = {
+                'file': (mp4, 'IMG_2696.MP4')
+            }
+            response = self.client.post('/api/VideoUpload', content_type='multipart/form-data', data=data)
 
-    #     self.assertEqual(response.status_code, 200, "Result: " + response.data.decode('utf-8'))
+        self.assertEqual(response.status_code, 200, "Result: " + response.data.decode('utf-8'))
 
-    # #def test_picture_upload(self):
-    #     # Get the directory of the current script
-    #     current_directory = os.path.dirname(__file__)
-    #     # Construct the path to the MP4 file relative to the current script
-    #     file_path = os.path.join(current_directory, 'Amazon_Web_Services-Logo.PNG')
+    def test_picture_upload(self):
+        # Get the directory of the current script
+        current_directory = os.path.dirname(__file__)
+        # Construct the path to the MP4 file relative to the current script
+        file_path = os.path.join(current_directory, 'Amazon_Web_Services-Logo.PNG')
 
-    #     with open(file_path, 'rb') as jpg:
-    #         data = {
-    #             'file': (jpg, 'Amazon_Web_Services-Logo.PNG')
-    #         }
-    #         response = self.client.post('/api/PictureUpload', content_type='multipart/form-data', data=data)
+        with open(file_path, 'rb') as jpg:
+            data = {
+                'file': (jpg, 'Amazon_Web_Services-Logo.PNG')
+            }
+            response = self.client.post('/api/PictureUpload', content_type='multipart/form-data', data=data)
 
-    #     self.assertEqual(response.status_code, 200, "Result: " + response.data.decode('utf-8'))
+        self.assertEqual(response.status_code, 200, "Result: " + response.data.decode('utf-8'))
 
 if __name__ == '__main__':
     unittest.main()

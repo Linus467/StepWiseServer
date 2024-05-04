@@ -10,13 +10,14 @@ import pdb
 #get all methods from helpers 
 from helpers import (fetch_and_format_user, fetch_and_format_materials, fetch_and_format_tools,
                     fetch_and_format_steps, fetch_and_format_ratings,
-                    fetch_and_format_tutorial, fetch_and_format_tutorials)
+                    fetch_and_format_tutorial, fetch_and_format_tutorials, fetch_and_format_whole_user)
 from werkzeug.security import check_password_hash, generate_password_hash
 import uuid
 import json
 import re
 from minio import Minio
 from minio.error import S3Error
+import logging
 
 def create_app(test_config=None):
     app = Flask(__name__)
@@ -31,21 +32,21 @@ def create_app(test_config=None):
             DATABASE_HOST="127.0.0.1",
             DATABASE_PORT="5433",
             TEST_ENVIRONMENT='False',
-            S3_DATA_BUCKET_URL = 'http://localhost:9000'
+            S3_DATA_BUCKET_URL = 'http://127.0.0.1:9000'
         )
     app.debug = app.config.get('TEST_ENVIRONMENT')
     s3 = boto3.client('s3',
-                    endpoint_url= app.config.get('S3_DATA_BUCKET_URL'),
-                    aws_access_key_id='e4LGvDlGjdD93i0pN1rq',
-                    aws_secret_access_key='vSlc0AS8ONBYHVKWfow0Y6NLXmEJy4xvvWhgqMK8',
+                    endpoint_url= 'http://localhost:4566',
+                    aws_access_key_id='test',
+                    aws_secret_access_key='test',
                     region_name='eu-central-1',
                     config=Config(signature_version='s3v4')
     )
-    minio_client = Minio(str(app.config.get('S3_DATA_BUCKET_URL')),
-                    access_key='e4LGvDlGjdD93i0pN1rq',
-                    secret_key='vSlc0AS8ONBYHVKWfow0Y6NLXmEJy4xvvWhgqMK8',
-                    secure=False,
-    )
+    # minio_client = Minio(str(app.config.get('S3_DATA_BUCKET_URL')),
+    #                 access_key='e4LGvDlGjdD93i0pN1rq',
+    #                 secret_key='vSlc0AS8ONBYHVKWfow0Y6NLXmEJy4xvvWhgqMK8',
+    #                 secure=False,
+    # )
 
     #DB Connection
     def get_db_connection():
@@ -67,23 +68,20 @@ def create_app(test_config=None):
         conn.close()
         return bool(user)
 
-    #Decorators
+    #region Decorators
+
     def require_auth(f):
         @wraps(f)
         def decorated_function(*args, **kwargs):
-            # Assuming you're sending `UserId` and `sessionKey` as headers.
-            user_id = request.headers.get('user_id')
-            session_key = request.headers.get('session_key')
+            user_id = request.headers.get('User-Id')
+            session_key = request.headers.get('Session-Key')
 
-            # Performs authentication check
             if not user_id or not session_key or not authenticate(user_id, session_key):
-                # If authentication fails, return an appropriate response
                 if test_config:
                     error_message = f"Authentication with Session Key failed: {user_id}, {session_key}"
                     return jsonify({"error": error_message}), 401
                 return jsonify({"error": "Authentication with Session Key failed"}), 401
 
-            # Authentication passed, call the actual view function
             return f(*args, **kwargs)
         return decorated_function
 
@@ -125,6 +123,8 @@ def create_app(test_config=None):
             conn.close()
             return f(*args, **kwargs)
         return decorated_function
+
+    #endregion
 
     #email check
     def check_email(email):
@@ -206,6 +206,33 @@ def create_app(test_config=None):
 
         return jsonify({"success": True}), 200
 
+    @app.route("/api/DeleteRating", methods=["DELETE"])
+    @require_auth
+    def delete_rating():
+        user_id = g.user_id
+        tutorial_id = request.headers.get('tutorial_id')
+
+        if not tutorial_id:
+            return jsonify({"error": "Missing required fields"}), 400
+
+        try:
+            conn = get_db_connection()
+            cur = conn.cursor()
+
+            # Delete the rating
+            cur.execute("""
+                DELETE FROM TutorialRating
+                WHERE user_id = %s AND tutorial_id = %s
+            """, (user_id, tutorial_id))
+            conn.commit()
+
+        except Exception as e:
+            return jsonify({"error": "Database error"}), 500
+        finally:
+            cur.close()
+            conn.close()
+
+        return jsonify({"success": True}), 200
     #endregion
 
     #region Account
@@ -347,13 +374,17 @@ def create_app(test_config=None):
     @app.route("/api/GetUser", methods=["GET"])
     @require_auth
     def get_user():
-        user_id = request.headers.get('user_id')
+        user_id = request.headers.get('User-Id')
+        #logger print user_id
+        print(f"User ID: {user_id}")
         conn = get_db_connection()
         cur = conn.cursor()
         #getting the user in the correct format
-        user = fetch_and_format_user(cur, user_id)
+        user = fetch_and_format_whole_user(cur, user_id)
         cur.close()
         conn.close()
+        if not user:
+            return jsonify({"error": "User not found"}), 404
         return jsonify({"user" : user}), 200
     
     @app.route("/api/UpdateUser", methods=["POST"])
@@ -529,11 +560,12 @@ def create_app(test_config=None):
     def query_string():
         query = request.headers.get('query')
         if not query:
-            return jsonify({"error": "Query parameter is required"}), 400
+            return get_browser()
 
         conn = get_db_connection()
         cur = conn.cursor()
         # Using ILIKE for case-insensitive search and % for wildcard matching
+        
         search_query = f"%{query}%"
         try:
             cur.execute("""
@@ -556,10 +588,12 @@ def create_app(test_config=None):
                     t.complete
                 FROM Tutorials t
                 JOIN "User" u ON t.user_id = u.user_id
-                WHERE t.title ILIKE %s OR t.description ILIKE %s
+                WHERE t.title ILIKE (%s) OR t.description ILIKE (%s)
             """, (search_query, search_query))
-            tutorials_output = []
-            fetch_and_format_tutorials(cur, cur.fetchall())
+            tutorials_output = fetch_and_format_tutorials(cur, cur.fetchall())
+
+            if not tutorials_output:
+                return jsonify({"message": "No tutorials found"}), 404
 
             return jsonify(tutorials_output), 200
 
@@ -1168,8 +1202,8 @@ def create_app(test_config=None):
 
     #region BucketUpload
     @app.route("/api/VideoUpload", methods=["POST"])
-    # @require_auth
-    # @require_isCreator
+    #@require_auth
+    #@require_isCreator
     def upload_video():
         if 'file' not in request.files:
             return jsonify({"error": "No files part"}), 400
@@ -1198,13 +1232,9 @@ def create_app(test_config=None):
                 return jsonify({"error": str(e)}), 500
             
         return jsonify({"message:" : "Upload successful", "VideoPath" : f"{app.config.get('S3_DATA_BUCKET_URL')}/video/{file.name}"}), 200
-
+    
     @app.route("/api/PictureUpload", methods=["POST"])
-    # @require_auth
-    # @require_isCreator
     def upload_picture():
-        data = request.json
-        picture_type = data.get('Type')
         if 'file' not in request.files:
             return jsonify({"error": "No files part"}), 400
         
@@ -1213,24 +1243,22 @@ def create_app(test_config=None):
             return jsonify({"error": "Wrong file name"}), 400
         
         file_uuid = str(uuid.uuid4())
-        file_key = f"{file_uuid}.jpg"
+        file.filename = f"{file_uuid}.jpg"
         if file:
             bucket_name = 'picture'
-            file_name = file.filename
             try:
-                minio_client.put_object(
+                s3.upload_fileobj(
                     file,
                     bucket_name,
-                    file_key,
-                    content_type=file.content_type
+                    file.filename,
+                    ExtraArgs={
+                        'ContentType': file.content_type
+                    }
                 )
-
-            except Exception as e:
-                return jsonify({"error: " : str(e)}), 500
-            
-        return jsonify({"message:" : "Upload successful"}), 200
-
-    #endregion
+            except S3Error as e:
+                return jsonify({"error": str(e)}), 500
+        
+        return jsonify({"message": "Upload successful", "PicturePath": f"{app.config.get('S3_DATA_BUCKET_URL')}/picture/{file.filename}"}), 200
 
     return app
 

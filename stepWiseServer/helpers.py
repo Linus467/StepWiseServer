@@ -275,3 +275,85 @@ def fetch_and_format_tutorials(cur, tutorials_data):
         tutorials_formatted.append(tutorial_data)
         
     return tutorials_formatted
+
+def fetch_and_format_whole_user(cur, user_id):
+    # Fetch user data
+    cur.execute("""
+        SELECT
+            user_id AS id,
+            firstname AS firstName,
+            lastname AS lastName,
+            email,
+            creator AS isCreator
+        FROM "User"
+        WHERE user_id = %s
+    """, (user_id,))
+    user_data = cur.fetchone()
+    if not user_data:
+        return None
+
+    # Fetch Watch History
+    cur.execute("""
+        SELECT
+            wh.history_id AS id,
+            t.tutorial_id AS tutorialId,
+            t.title AS tutorialTitle,
+            t.tutorial_kind AS tutorialKind,
+            t.time AS tutorialTime,
+            t.difficulty AS tutorialDifficulty,
+            t.complete AS tutorialComplete,
+            t.description AS tutorialDescription,
+            t.preview_picture_link AS tutorialPreviewPictureLink,
+            t.preview_type AS tutorialPreviewType,
+            t.views AS tutorialViews,
+            wh.last_watched_time AS lastWatchedTime,
+            wh.completed_steps AS completedSteps
+        FROM watch_history wh
+        INNER JOIN tutorials t ON wh.tutorial_id = t.tutorial_id
+        WHERE wh.user_id = %s
+    """, (user_id,))
+    watch_history = [dict(record) for record in cur.fetchall()]
+
+    # Fetch Favorite List
+    cur.execute("""
+        SELECT
+            fav_id AS id,
+            t.tutorial_id AS tutorialId,
+            t.title AS tutorialTitle,
+            t.tutorial_kind AS tutorialKind,
+            t.time AS tutorialTime,
+            t.difficulty AS tutorialDifficulty,
+            t.complete AS tutorialComplete,
+            t.description AS tutorialDescription,
+            t.preview_picture_link AS tutorialPreviewPictureLink,
+            t.preview_type AS tutorialPreviewType,
+            t.views AS tutorialViews,
+            fl.date_time AS dateTime
+        FROM favouritelist fl
+        INNER JOIN tutorials t ON fl.tutorial_id = t.tutorial_id
+        WHERE fl.user_id = %s
+    """, (user_id,))
+    favorite_list = [dict(record) for record in cur.fetchall()]
+
+    # Fetch Search History
+    cur.execute("""
+        SELECT
+            search_id AS id,
+            searched_text AS searchedText
+        FROM search_history
+        WHERE user_id = %s
+    """, (user_id,))
+    search_history = [dict(record) for record in cur.fetchall()]
+
+    user = {
+        "id": user_data["id"],
+        "firstName": user_data["firstname"],
+        "lastName": user_data["lastname"],
+        "email": user_data["email"],
+        "isCreator": user_data["iscreator"],
+        "watchHistory": watch_history,
+        "favoriteList": favorite_list,
+        "searchHistory": search_history
+    }
+
+    return user
