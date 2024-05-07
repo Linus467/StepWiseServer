@@ -434,8 +434,8 @@ def create_app(test_config=None):
     @app.route("/api/GetHistoryList", methods=["GET"])
     @require_auth
     def get_history_list():
-        user_id = request.headers.get('user_id')
-        session_key = request.headers.get('session_key')
+        user_id = request.headers.get('user-id')
+        session_key = request.headers.get('session-key')
         tutorials_data_result = []
         
         try:
@@ -466,54 +466,48 @@ def create_app(test_config=None):
 
             tutorials_data = cur.fetchall()
 
-            if(tutorials_data.count(cur) == 0):
+            if(tutorials_data[0] == None):
                 return jsonify({"Empty": "Empty"}), 201
-            
+            tutorials_data_result = []
             for tutorial_data in tutorials_data:
-                    # For each tutorial, fetch additional data like materials, tools, steps, and ratings
-                    tutorial_id = tutorial_data['tutorial_id']
-                    materials = fetch_and_format_materials(cur, tutorial_id)
-                    tools = fetch_and_format_tools(cur, tutorial_id)
-                    steps = fetch_and_format_steps(cur, tutorial_id)
-                    ratings = fetch_and_format_ratings(cur, tutorial_id)
-                    
-                    # Add the fetched data to the tutorial_data dictionary
-                    tutorials_data_result.append({
-                        "id": tutorial_data["tutorial_id"],
-                        "title": tutorial_data["title"],
-                        "tutorialKind": tutorial_data["tutorial_kind"],
-                        "user": {
-                            "id": tutorial_data["user_id"],
-                            "firstName": tutorial_data["firstname"],
-                            "lastName": tutorial_data["lastname"],
-                            "email": tutorial_data["email"],
-                            "isCreator": tutorial_data["creator"]
-                        },
-                        "time": tutorial_data["time"],
-                        "difficulty": tutorial_data["difficulty"],
-                        "completed": tutorial_data["complete"],
-                        "description": tutorial_data["description"],
-                        "previewPictureLink": tutorial_data["preview_picture_link"],
-                        "previewType": tutorial_data["preview_type"],
-                        "views": tutorial_data["views"],
-                        "steps": steps,
-                        "materials": materials,
-                        "tools": tools,
-                        "ratings": ratings
+                # For each tutorial, fetch additional data like materials, tools, steps, and ratings
+                tutorial_id = tutorial_data['tutorial_id']
+                materials = fetch_and_format_materials(cur, tutorial_id)
+                tools = fetch_and_format_tools(cur, tutorial_id)
+                steps = fetch_and_format_steps(cur, tutorial_id)
+                ratings = fetch_and_format_ratings(cur, tutorial_id)
+                user = fetch_and_format_user(cur,user_id)
+                # Add the fetched data to the tutorial_data dictionary
+                tutorials_data_result.append({
+                    "id": tutorial_data["tutorial_id"],
+                    "title": tutorial_data["title"],
+                    "tutorialKind": tutorial_data["tutorial_kind"],
+                    "user": user,
+                    "time": tutorial_data["time"],
+                    "difficulty": tutorial_data["difficulty"],
+                    "completed": tutorial_data["complete"],
+                    "descriptionText": tutorial_data["description"],
+                    "previewPictureLink": tutorial_data["preview_picture_link"],
+                    "previewType": tutorial_data["preview_type"],
+                    "views": tutorial_data["views"],
+                    "steps": steps,
+                    "materials": materials,
+                    "tools": tools,
+                    "ratings": ratings
                     })
-                # Return the list of tutorials
+
             
             cur.close()
             conn.close()
         except Exception as e:
             return jsonify({"error": f"Database error: {e}"}), 500
-        return jsonify(tutorial_data), 200
+        return jsonify(tutorials_data_result), 200
 
     @app.route("/api/DeleteHistorySingle", methods=["DELETE"])
     @require_auth
     def delete_history_single():
         # Get parameters from the request
-        user_id = request.headers.get('user_id')
+        user_id = request.headers.get('user-id')
         tutorial_id = request.headers.get('tutorial_id')
         
         # DB connection
@@ -537,7 +531,7 @@ def create_app(test_config=None):
     @require_auth
     def delete_history():
         # Get the user_id from require auth decorator
-        user_id = request.headers.get('user_id')
+        user_id = request.headers.get('user-id')
         
         # DB connection
         conn = get_db_connection()
