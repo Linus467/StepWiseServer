@@ -602,28 +602,86 @@ def create_app(test_config=None):
     @app.route("/api/GetFavorite", methods=["GET"])
     @require_auth
     def get_favorite():
-        user_id = request.headers.get("user_id")
+        user_id = request.headers.get("user-id")
+        session_key = request.headers.get('session-key')
+        favorite_tutorials_result = []
 
-        conn = get_db_connection()
-        cur = conn.cursor()
-        cur.execute("""
-            SELECT t.*, u.* 
-            FROM Tutorials t
-            INNER JOIN "User" u ON u.user_id = t.user_id
-            INNER JOIN FavouriteList f ON t.tutorial_id = f.tutorial_id
-            WHERE f.user_id = %s
-        """, (user_id,))
-        favorite_tutorials = cur.fetchall()
-        cur.close()
-        conn.close()
-        return jsonify(favorite_tutorials), 200
+        try:
+            conn = get_db_connection()
+            cur = conn.cursor()
+
+            # Select query to get all necessary tutorial data based on the favorite list
+            cur.execute("""
+                SELECT
+                    t.tutorial_id,
+                    t.title,
+                    t.tutorial_kind,
+                    u.user_id,
+                    u.firstname,
+                    u.lastname,
+                    u.email,
+                    u.creator,
+                    t.time,
+                    t.difficulty,
+                    t.complete,
+                    t.description,
+                    t.preview_picture_link,
+                    t.preview_type,
+                    t.views,
+                    t.steps
+                FROM Tutorials t
+                INNER JOIN "User" u ON t.user_id = u.user_id
+                INNER JOIN FavouriteList f ON f.tutorial_id = t.tutorial_id
+                WHERE f.user_id = %s
+            """, (user_id,))
+
+            favorite_tutorials = cur.fetchall()
+
+            if not favorite_tutorials:
+                return jsonify({"Empty": "Empty"}), 201
+
+            for favorite in favorite_tutorials:
+                tutorial_id = favorite['tutorial_id']
+                materials = fetch_and_format_materials(cur, tutorial_id)
+                tools = fetch_and_format_tools(cur, tutorial_id)
+                steps = fetch_and_format_steps(cur, tutorial_id)
+                ratings = fetch_and_format_ratings(cur, tutorial_id)
+                user_info = fetch_and_format_user(cur, user_id)
+
+                # Create the final data structure for each favorite tutorial
+                favorite_tutorials_result.append({
+                    "id": tutorial_id,
+                    "title": favorite["title"],
+                    "tutorialKind": favorite["tutorial_kind"],
+                    "user": user_info,
+                    "time": favorite["time"],
+                    "difficulty": favorite["difficulty"],
+                    "completed": favorite["complete"],
+                    "descriptionText": favorite["description"],
+                    "previewPictureLink": favorite["preview_picture_link"],
+                    "previewType": favorite["preview_type"],
+                    "views": favorite["views"],
+                    "steps": steps,
+                    "materials": materials,
+                    "tools": tools,
+                    "ratings": ratings
+                })
+
+            cur.close()
+            conn.close()
+
+        except Exception as e:
+            return jsonify({"error": f"Database error: {e}"}), 500
+
+        return jsonify(favorite_tutorials_result), 200
+
 
     @app.route("/api/RemoveFavorite", methods=["POST"])
     @require_auth
     def remove_favorite():
         data = request.json
         tutorial_id = data.get("tutorial_id")
-        user_id = request.headers.get("user_id")
+        user_id = request.headers.get("user-id")
         
         if not all([user_id, tutorial_id]):
             return jsonify({"error": "Missing required parameters"}), 400
