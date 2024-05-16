@@ -1,0 +1,103 @@
+#!/bin/bash
+
+# Variables
+REPO_URL="git@github.com:yourusername/your-private-repo.git"  # SSH URL of your private repo
+REPO_DIR="/home/ec2-user/your-private-repo"
+VENV_DIR="$REPO_DIR/venv"
+GUNICORN_SERVICE="/etc/systemd/system/flaskapp.service"
+NGINX_CONF="/etc/nginx/nginx.conf"
+
+# Update and install necessary packages
+sudo yum update -y
+sudo yum install -y git python3 python3-pip nginx
+
+# Clone the private repository using SSH or HTTPS with token
+if [ ! -d "$REPO_DIR" ]; then
+  git clone $REPO_URL $REPO_DIR
+else
+  cd $REPO_DIR && git pull origin main
+fi
+
+# Set up a virtual environment
+python3 -m venv $VENV_DIR
+source $VENV_DIR/bin/activate
+
+# Install Python dependencies
+pip install --upgrade pip
+pip install -r $REPO_DIR/requirements.txt
+
+# Create Gunicorn systemd service file
+sudo tee $GUNICORN_SERVICE > /dev/null <<EOL
+[Unit]
+Description=Gunicorn instance to serve Flask application
+After=network.target
+
+[Service]
+User=ec2-user
+Group=nginx
+WorkingDirectory=$REPO_DIR
+Environment="PATH=$VENV_DIR/bin"
+ExecStart=$VENV_DIR/bin/gunicorn --workers 3 --bind 127.0.0.1:8000 wsgi:app
+
+[Install]
+WantedBy=multi-user.target
+EOL
+
+# Enable and start Gunicorn service
+sudo systemctl daemon-reload
+sudo systemctl start flaskapp
+sudo systemctl enable flaskapp
+
+# Configure Nginx
+sudo tee $NGINX_CONF > /dev/null <<EOL
+
+
+user nginx;
+worker_processes auto;
+error_log /var/log/nginx/error.log;
+pid /run/nginx.pid;
+
+events {
+    worker_connections 1024;
+}
+
+http {
+    include /etc/nginx/mime.types;
+    default_type application/octet-stream;
+    log_format main '$remote_addr - $remote_user [$time_local] "$request" '
+                    '$status $body_bytes_sent "$http_referer" '
+                    '"$http_user_agent" "$http_x_forwarded_for"';
+    access_log /var/log/nginx/access.log main;
+    sendfile on;
+    keepalive_timeout 65;
+    include /etc/nginx/conf.d/*.conf;
+
+    server {
+        listen 80;
+        server_name _;
+
+        location / {
+            proxy_pass http://127.0.0.1:8000;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+
+        error_page 404 /404.html;
+        location = /404.html {
+        }
+
+        error_page 500 502 503 504 /50x.html;
+        location = /50x.html {
+        }
+    }
+}
+EOL
+
+# Restart Nginx to apply changes
+sudo systemctl restart nginx
+
+# Print status of services
+sudo systemctl status flaskapp
+sudo systemctl status nginx
