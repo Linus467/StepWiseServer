@@ -28,7 +28,7 @@ def create_app(test_config=None):
             SECRET_KEY='dev',
             DATABASE_NAME="StepWiseServer",
             DATABASE_USER="postgres",
-            DATABASE_PASSWORD="2NPLCP@89!to",
+            DATABASE_PASSWORD="2NPLCP@89!to", #aws cefpyv-5xezho-binxIb
             DATABASE_HOST="127.0.0.1",
             DATABASE_PORT="5433",
             TEST_ENVIRONMENT='False',
@@ -73,22 +73,23 @@ def create_app(test_config=None):
     def require_auth(f):
         @wraps(f)
         def decorated_function(*args, **kwargs):
-            user_id = request.headers.get('User-Id')
-            session_key = request.headers.get('Session-Key')
-
+            print("Request Headers:")
+            for header, value in request.headers.items():
+                print(f"{header}: {value}")
+            user_id = request.headers.get('user-id')
+            session_key = request.headers.get('session-key')
             if not user_id or not session_key or not authenticate(user_id, session_key):
                 if test_config:
                     error_message = f"Authentication with Session Key failed: {user_id}, {session_key}"
                     return jsonify({"error": error_message}), 401
                 return jsonify({"error": "Authentication with Session Key failed"}), 401
-
             return f(*args, **kwargs)
         return decorated_function
 
     def require_isCreator(f):
         @wraps(f)
         def decorated_function(*args, **kwargs):
-            user_id = request.headers.get('user_id')
+            user_id = request.headers.get('user-id')
             # Check if the user is a creator
             conn = get_db_connection()
             cur = conn.cursor()
@@ -107,8 +108,8 @@ def create_app(test_config=None):
     def require_isCreator_ofTutorial(f):
         @wraps(f)
         def decorated_function(*args, **kwargs):
-            user_id = request.headers.get('user_id')
-            tutorial_id = request.headers.get('tutorial_id')
+            user_id = request.headers.get('user-id')
+            tutorial_id = request.headers.get('tutorial-id')
             # Check if the user is the creator of the tutorial
             conn = get_db_connection()
             cur = conn.cursor()
@@ -117,7 +118,7 @@ def create_app(test_config=None):
             # If the user is not the creator of the tutorial, return an error response
             if not tutorial_creator:
                 return jsonify({"error": "No User found"}), 403
-            if tutorial_creator['user_id'] != user_id:
+            if str(tutorial_creator['user_id']).lower() != str(user_id).lower():
                 return jsonify({"error": "User is not the creator of the tutorial"}), 403
             cur.close()
             conn.close()
@@ -144,7 +145,7 @@ def create_app(test_config=None):
     def get_tutorial(): 
         conn = get_db_connection()
         cur = conn.cursor()
-        tutorial_id = request.headers.get('tutorial_id')
+        tutorial_id = request.headers.get('tutorial-id')
         if not tutorial_id:
             headers_json = json.dumps(dict(request.headers))
             error_message = f"Missing tutorial_id parameter. Headers: {headers_json}"
@@ -158,7 +159,7 @@ def create_app(test_config=None):
             cur.close()
             conn.close()
 
-        return jsonify([tutorial_data])
+        return jsonify(tutorial_data)
 
 
     @app.route("/api/Rating", methods=["POST"])
@@ -798,12 +799,12 @@ def create_app(test_config=None):
     #region content
 
     @app.route("/api/AddContent", methods=["POST"])
-    @require_isCreator_ofTutorial
     @require_auth
+    @require_isCreator_ofTutorial
     def add_content():
         data = request.json
-        tutorial_id = data.get('tutorial_id')
-        step_id = data.get('step_id')
+        tutorial_id = data.get('tutorial-id')
+        step_id = data.get('step-id')
         content_type = data.get('type')  # 1 for TextContent, 2 for PictureContent, 3 for VideoContent
         content = data.get('content')
 
@@ -832,13 +833,15 @@ def create_app(test_config=None):
             cur.execute(f"""
                 INSERT INTO {table_name} (id, {column_name})
                 VALUES (%s, %s)
-            """, (str(uuid.uuid4()), content))
+            """, (str(content_id), content))
+            conn.commit()
             sub_step_id = uuid.uuid4()
             # Insert a corresponding record into SubSteps table
             cur.execute("""
                 INSERT INTO SubSteps (sub_step_id, content_type, content_id)
                 VALUES (%s, %s, %s)
             """, (str(sub_step_id), content_type, str(content_id)))
+            conn.commit()
 
             # Insert a record into SubStepsList table
             cur.execute("""
@@ -856,12 +859,12 @@ def create_app(test_config=None):
         return jsonify({"success": True}), 200
 
     @app.route("/api/DeleteContent", methods=["DELETE"])
-    @require_isCreator_ofTutorial
     @require_auth
+    @require_isCreator_ofTutorial
     def delete_content():
-        tutorial_id = request.headers.get('tutorial_id')
-        step_id = request.headers.get('step_id')
-        content_id = request.headers.get('content_id')
+        tutorial_id = request.headers.get('tutorial-id')
+        step_id = request.headers.get('step-id')
+        content_id = request.headers.get('content-id')
 
         if not all([tutorial_id, step_id, content_id]):
             return jsonify({"error": "Missing required fields"}), 400
@@ -870,12 +873,17 @@ def create_app(test_config=None):
             conn = get_db_connection()
             cur = conn.cursor()
 
+            cur.execute("""Select 
+                        
+                        """,)
             # Fetch the content type
             cur.execute("""
-                SELECT content_type FROM SubSteps st
+                SELECT content_type, sub_step_id FROM SubSteps st
                 WHERE st.content_id = %s
             """,  (content_id,))
-            content_type = cur.fetchone()['content_type']
+            data = cur.fetchone()
+            content_type = data['content_type']
+            sub_step_id = data['sub_step_id']
             if not content_type:
                 return jsonify({"error": f"Content not found for contentid:{content_id}"}), 404
 
@@ -890,10 +898,22 @@ def create_app(test_config=None):
                 return jsonify({"error": f"Invalid content type content_type: {content_type}"}), 400
 
             # Delete the content from the selected table
-            cur.execute(f"""
-                DELETE FROM {table_name}
+            cur.execute("""
+                DELETE FROM %s
                 WHERE id = %s
-            """, (content_id,))
+            """, (table_name,content_id,))
+            conn.commit()
+
+            cur.execute("""
+                DELETE FROM SubSteps
+                WHERE id = %s
+            """, (sub_step_id,))
+            conn.commit()
+
+            cur.execute("""
+                DELETE FROM SubStepsList
+                WHERE id = %s
+            """, (sub_step_id,))
             conn.commit()
 
         except Exception as e:
@@ -1018,6 +1038,48 @@ def create_app(test_config=None):
         finally:
             if cur: cur.close()
             if conn: conn.close()
+    
+    @app.route("/api/EditTutorial", methods=["PUT"])
+    @require_isCreator_ofTutorial
+    @require_auth 
+    def edit_tutorial():
+        data = request.json
+        tutorial_id = request.headers.get('tutorial-id')
+        
+        updates = {
+            'title': data.get('title'),
+            'tutorial_kind': data.get('tutorial-kind'),
+            'time': data.get('time'),
+            'difficulty': data.get('difficulty'),
+            'description': data.get('description'),
+            'preview_picture_link': data.get('preview-picture-link'),
+            'preview_type': data.get('preview-type')
+        }
+        
+        set_clause = ', '.join([f"{key} = %s" 
+                                for key, value in updates.items()
+                                    if value is not None])
+        parameters = [value for value in updates.values() if value is not None]
+
+        if not parameters:
+            return jsonify({"error": "No fields provided for update"}), 400
+
+        parameters.append(tutorial_id.lower())
+
+        try:
+            conn = get_db_connection()
+            cur = conn.cursor()
+            query = f"""UPDATE public.Tutorials SET {set_clause} WHERE tutorial_id = %s;"""
+            cur.execute(query, parameters)
+            conn.commit
+            if cur.rowcount == 0:
+                return jsonify({"error": "No tutorial found with the provided ID"}), 404
+            return jsonify({"success": True}), 200
+        except Exception as e:
+            return jsonify({"error": f"Database error: {e}"}), 500
+        finally:
+            cur.close()
+            conn.close()
 
     @app.route("/api/DeleteTutorial", methods=["DELETE"])
     @require_isCreator_ofTutorial
@@ -1253,6 +1315,7 @@ def create_app(test_config=None):
     #endregion
 
     #region BucketUpload
+
     @app.route("/api/VideoUpload", methods=["POST"])
     #@require_auth
     #@require_isCreator
@@ -1283,7 +1346,7 @@ def create_app(test_config=None):
             except S3Error as e:
                 return jsonify({"error": str(e)}), 500
             
-        return jsonify({"message:" : "Upload successful", "VideoPath" : f"{app.config.get('S3_DATA_BUCKET_URL')}/video/{file.name}"}), 200
+        return jsonify({"Path" : f"http://localhost:4566/video/{file.name}"}), 200
     
     @app.route("/api/PictureUpload", methods=["POST"])
     def upload_picture():
@@ -1310,8 +1373,9 @@ def create_app(test_config=None):
             except S3Error as e:
                 return jsonify({"error": str(e)}), 500
         
-        return jsonify({"message": "Upload successful", "PicturePath": f"{app.config.get('S3_DATA_BUCKET_URL')}/picture/{file.filename}"}), 200
-
+        return jsonify({"Path": f"http://localhost:4566/picture/{file.filename}"}), 200
+    #endregion
+    
     return app
 
 if __name__ == "__main__":

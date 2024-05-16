@@ -44,7 +44,7 @@ def fetch_and_format_materials(cur, tutorial_id):
 
 def fetch_and_format_tools(cur, tutorial_id):
     cur.execute("""
-        SELECT tool_id AS id, tool_title AS title, tool_amount AS amount, link
+        SELECT tool_id AS id, tool_title AS title, tool_amount AS amount, link, tool_price AS price
         FROM Tools
         WHERE tutorial_id = %s
     """, (tutorial_id,))
@@ -54,7 +54,8 @@ def fetch_and_format_tools(cur, tutorial_id):
             "id": str(tool_record["id"]),
             "title": tool_record["title"],
             "amount": tool_record["amount"],
-            "link": tool_record["link"]
+            "link": tool_record["link"],
+            "price": tool_record["price"]
         }
         for tool_record in tool_records
     ]
@@ -89,15 +90,15 @@ def fetch_and_format_steps(cur, tutorial_id):
                 if content_data:
                     content = {"id": content_data['id'], "contentText": content_data['content_text']}
             elif sub_step['content_type'] == 2:
-                cur.execute("SELECT id, content_picture_link AS pictureLink FROM PictureContent WHERE id = %s", (sub_step['content_id'],))
+                cur.execute("SELECT id, content_picture_link FROM PictureContent WHERE id = %s", (sub_step['content_id'],))
                 content_data = cur.fetchone()
                 if content_data:
-                    content = {"id": content_data['id'], "pictureLink": content_data['pictureLink']}
+                    content = {"id": content_data['id'], "pictureLink": content_data['content_picture_link']}
             elif sub_step['content_type'] == 3:
-                cur.execute("SELECT id, content_video_link AS videoLink FROM VideoContent WHERE id = %s", (sub_step['content_id'],))
+                cur.execute("SELECT id, content_video_link FROM VideoContent WHERE id = %s", (sub_step['content_id'],))
                 content_data = cur.fetchone()
                 if content_data:
-                    content = {"id": content_data['id'], "videoLink": content_data['videoLink']}
+                    content = {"id": content_data['id'], "videoLink": content_data['content_video_link']}
 
             adjusted_sub_steps.append({
                 "id": sub_step['sub_step_id'],
@@ -135,7 +136,8 @@ def fetch_and_format_steps(cur, tutorial_id):
             "subStepList": adjusted_sub_steps,
             "userComments": formatted_comments  # Include this only if you're fetching comments
         })
-        return steps
+        
+    return steps
 
 def fetch_and_format_ratings(cur, tutorial_id):
     cur.execute("""
