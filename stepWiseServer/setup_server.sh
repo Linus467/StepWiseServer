@@ -126,10 +126,10 @@ IncludeOptional conf.d/*.conf
 <VirtualHost *:80>
     ServerName your_domain_or_ip
 
-    WSGIDaemonProcess flaskapp python-home=$VENV_DIR python-path=$REPO_DIR
-    WSGIScriptAlias / $REPO_DIR/wsgi.py
+    WSGIDaemonProcess flaskapp python-home=/home/ec2-user/stepWiseServer/stepWiseServer/venv python-path=/home/ec2-user/stepWiseServer/stepWiseServer
+    WSGIScriptAlias / /home/ec2-user/stepWiseServer/stepWiseServer/wsgi.py
 
-    <Directory $REPO_DIR>
+    <Directory /home/ec2-user/stepWiseServer/stepWiseServer>
         Require all granted
     </Directory>
 
