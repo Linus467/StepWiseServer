@@ -26,11 +26,11 @@ def create_app(test_config=None):
     else:
         app.config.from_mapping(
             SECRET_KEY='dev',
-            DATABASE_NAME="StepWiseServer",
+            DATABASE_NAME="stepwise",
             DATABASE_USER="postgres",
             DATABASE_PASSWORD="2NPLCP@89!to", #aws cefpyv-5xezho-binxIb
             DATABASE_HOST="127.0.0.1",
-            DATABASE_PORT="5433",
+            DATABASE_PORT="5432",
             TEST_ENVIRONMENT='False',
             S3_DATA_BUCKET_URL = 'http://127.0.0.1:9000'
         )
