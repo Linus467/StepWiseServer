@@ -36,10 +36,6 @@ def create_app(test_config=None):
         )
     app.debug = app.config.get('TEST_ENVIRONMENT')
     s3 = boto3.client('s3',
-                    endpoint_url= 'http://localhost:4566',
-                    aws_access_key_id='test',
-                    aws_secret_access_key='test',
-                    region_name='eu-central-1',
                     config=Config(signature_version='s3v4')
     )
     # minio_client = Minio(str(app.config.get('S3_DATA_BUCKET_URL')),
