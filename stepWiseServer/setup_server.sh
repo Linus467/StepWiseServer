@@ -2,7 +2,7 @@
 
 # Variables
 REPO_URL="https://github.com/Linus467/StepWiseServer.git"  # HTTPS URL of your private repo
-REPO_DIR="/home/ec2-user/stepWiseServer"
+REPO_DIR="/home/ec2-user/stepWiseServer/stepWiseServer"
 VENV_DIR="$REPO_DIR/venv"
 GUNICORN_SERVICE="/etc/systemd/system/flaskapp.service"
 APACHE_CONF="/etc/httpd/conf/httpd.conf"
