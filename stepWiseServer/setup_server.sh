@@ -5,143 +5,53 @@ REPO_URL="https://github.com/Linus467/StepWiseServer.git"  # HTTPS URL of your p
 REPO_DIR="/home/ec2-user/stepWiseServer/stepWiseServer"
 VENV_DIR="$REPO_DIR/venv"
 GUNICORN_SERVICE="/etc/systemd/system/flaskapp.service"
-APACHE_CONF="/etc/httpd/conf/httpd.conf"
+NGINX_CONF="/etc/nginx/conf.d/flaskapp.conf"
 
-# Update and install necessary packages
-sudo yum update -y
-sudo yum install -y git python3 python3-pip httpd
-
-# Clone the private repository using HTTPS
+# Fetch the latest code from the repository
 if [ ! -d "$REPO_DIR" ]; then
   git clone $REPO_URL $REPO_DIR
 else
   cd $REPO_DIR && git pull origin main
 fi
 
-# Set up a virtual environment
+# Set up or refresh the virtual environment
 python3 -m venv $VENV_DIR
 source $VENV_DIR/bin/activate
 
-# Install Python dependencies
+# Update and install Python dependencies
 pip install --upgrade pip
 pip install -r $REPO_DIR/requirements.txt
 
-# Create Gunicorn systemd service file
-sudo tee $GUNICORN_SERVICE > /dev/null <<EOL
-[Unit]
-Description=Gunicorn instance to serve Flask application
-After=network.target
-
-[Service]
-User=ec2-user
-Group=nginx
-WorkingDirectory=$REPO_DIR
-Environment="PATH=$VENV_DIR/bin"
-ExecStart=$VENV_DIR/bin/gunicorn --workers 3 --bind 127.0.0.1:8000 wsgi:app
-
-[Install]
-WantedBy=multi-user.target
-EOL
-
-# Enable and start Gunicorn service
-sudo systemctl daemon-reload
-sudo systemctl start flaskapp
+# Ensure Gunicorn is set up to start on reboot and start it
 sudo systemctl enable flaskapp
+sudo systemctl restart flaskapp
 
-# Configure Apache
-sudo tee $APACHE_CONF > /dev/null <<EOL
-ServerRoot "/etc/httpd"
-Listen 80
+# Check if Nginx configuration exists, if not create it
+if [ ! -f "$NGINX_CONF" ]; then
+    sudo tee $NGINX_CONF > /dev/null <<EOL
+server {
+    listen 80;
+    server_name your_domain_or_ip;  # Replace with your domain or IP
 
-Include conf.modules.d/*.conf
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
 
-User apache
-Group apache
-
-ServerAdmin root@localhost
-
-<Directory />
-    AllowOverride none
-    Require all denied
-</Directory>
-
-DocumentRoot "/var/www/html"
-
-<Directory "/var/www">
-    AllowOverride None
-    Require all granted
-</Directory>
-
-<Directory "/var/www/html">
-    Options Indexes FollowSymLinks
-    AllowOverride None
-    Require all granted
-</Directory>
-
-<IfModule dir_module>
-    DirectoryIndex index.html
-</IfModule>
-
-<Files ".ht*">
-    Require all denied
-</Files>
-
-ErrorLog "logs/error_log"
-LogLevel warn
-
-<IfModule log_config_module>
-    LogFormat "%h %l %u %t \"%r\" %>s %b" common
-    LogFormat "%h %l %u %t \"%r\" %>s %b \"%{Referer}i\" \"%{User-Agent}i\"" combined
-    CustomLog "logs/access_log" common
-</IfModule>
-
-<IfModule alias_module>
-    ScriptAlias /cgi-bin/ "/var/www/cgi-bin/"
-</IfModule>
-
-<Directory "/var/www/cgi-bin">
-    AllowOverride None
-    Options None
-    Require all granted
-</Directory>
-
-<IfModule mime_module>
-    TypesConfig /etc/mime.types
-    AddType application/x-compress .Z
-    AddType application/x-gzip .gz .tgz
-    AddType text/html .shtml
-    AddOutputFilter INCLUDES .shtml
-</IfModule>
-
-AddDefaultCharset UTF-8
-
-<IfModule mime_magic_module>
-    MIMEMagicFile conf/magic
-</IfModule>
-
-EnableSendfile on
-
-IncludeOptional conf.d/*.conf
-
-<VirtualHost *:80>
-    ServerName your_domain_or_ip
-
-    WSGIDaemonProcess flaskapp python-home=/home/ec2-user/stepWiseServer/stepWiseServer/venv python-path=/home/ec2-user/stepWiseServer/stepWiseServer
-    WSGIScriptAlias / /home/ec2-user/stepWiseServer/stepWiseServer/wsgi.py
-
-    <Directory /home/ec2-user/stepWiseServer/stepWiseServer>
-        Require all granted
-    </Directory>
-
-    ErrorLog ${APACHE_LOG_DIR}/error.log
-    CustomLog ${APACHE_LOG_DIR}/access.log combined
-</VirtualHost>
+    error_log /var/log/nginx/flaskapp_error.log;
+    access_log /var/log/nginx/flaskapp_access.log;
+}
 EOL
+fi
 
-# Restart Apache to apply changes
-sudo systemctl restart httpd
-sudo systemctl enable httpd
+# Restart Nginx to apply any changes
+sudo systemctl restart nginx
+sudo systemctl enable nginx
 
-# Print status of services
-sudo systemctl status flaskapp
-sudo systemctl status httpd
+# Print status of services to check everything is running smoothly
+echo "Checking the status of Gunicorn and Nginx..."
+sudo systemctl status flaskapp --no-pager
+sudo systemctl status nginx --no-pager
