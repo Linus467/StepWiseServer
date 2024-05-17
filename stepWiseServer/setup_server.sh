@@ -31,18 +31,15 @@ if [ ! -f "$NGINX_CONF" ]; then
     sudo tee $NGINX_CONF > /dev/null <<EOL
 server {
     listen 80;
-    server_name your_domain_or_ip;  # Replace with your domain or IP
+    server_name 52.28.42.177;
 
     location / {
-        proxy_pass http://127.0.0.1:8000;
+        proxy_pass http://unix:/tmp/gunicorn.sock;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For https;
-        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
     }
-
-    error_log /var/log/nginx/flaskapp_error.log;
-    access_log /var/log/nginx/flaskapp_access.log;
 }
 EOL
 fi
