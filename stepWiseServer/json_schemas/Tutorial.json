@@ -111,6 +111,14 @@
                   "content": {
                     "type": "object",
                     "properties": {
+                      "videoLink": {
+                        "type": "string",
+                        "format": "uri"
+                      },
+                      "pictureLink":{
+                        "type": "string",
+                        "format": "uri"
+                      },
                       "contentText": {
                         "type": "string"
                       },
