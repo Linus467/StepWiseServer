@@ -157,7 +157,49 @@ def create_app(test_config=None):
 
         return jsonify(tutorial_data)
 
+    @app.route("/api/myTutorial", methods=["GET"])
+    @require_auth
+    def get_myTutorials():
+        user_id = request.headers.get('user-id')
+        conn = get_db_connection()
+        cur = conn.cursor()
+        try:
+            cur.execute("""
+                SELECT
+                    t.tutorial_id,
+                    t.title,
+                    t.tutorial_kind,
+                    u.user_id,
+                    u.firstname,
+                    u.lastname,
+                    u.email,
+                    u.creator,
+                    t.time,
+                    t.difficulty,
+                    t.complete,
+                    t.description,
+                    t.preview_picture_link,
+                    t.preview_type,
+                    t.views,
+                    t.steps
+                FROM Tutorials t
+                INNER JOIN "User" u ON t.user_id = u.user_id
+                WHERE u.user_id = %s
+            """, (user_id,))
+            tutorials_data = cur.fetchall()
 
+            if not tutorials_data:
+                return jsonify({"message": "No tutorials found"}), 404
+
+            tutorials_data_result = fetch_and_format_tutorials(cur, tutorials_data)
+        finally:
+            cur.close()
+            conn.close()
+
+        return jsonify(tutorials_data_result), 200
+    #endregion
+
+    #region Ratings
     @app.route("/api/Rating", methods=["POST"])
     @require_auth
     def add_rating():
@@ -618,7 +660,6 @@ def create_app(test_config=None):
         conn.close()
 
         return jsonify({"success": True}), 200
-
 
     @app.route("/api/RemoveFavorite", methods=["POST"])
     @require_auth
