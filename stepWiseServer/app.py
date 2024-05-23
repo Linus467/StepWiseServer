@@ -1180,7 +1180,7 @@ def create_app(test_config=None):
         link = data.get('link')
 
         if not all([tutorial_id, material_id, title, amount, price, link]):
-            return jsonify({"error": f"Missing required fields"}), 400
+            return jsonify({"error": f"Missing required fields {tutorial_id,material_id,title,amount,price,link}"}), 400
 
         try:
             conn = get_db_connection()
@@ -1407,7 +1407,7 @@ def create_app(test_config=None):
             except S3Error as e:
                 return jsonify({"error": str(e)}), 500
             
-        return jsonify({"Path" : f"https://stepwisevideobucket.s3.amazonaws.com/{file.name}"}), 200
+        return jsonify({"Path" : f"https://stepwisevideobucket.s3.eu-central-1.amazonaws.com/{file.name}"}), 200
     
     @app.route("/api/PictureUpload", methods=["POST"])
     def upload_picture():
@@ -1434,7 +1434,7 @@ def create_app(test_config=None):
             except S3Error as e:
                 return jsonify({"error": str(e)}), 500
         
-        return jsonify({"Path": f"https://stepwisepicturebucket.s3.amazonaws.com/{file.filename}"}), 200
+        return jsonify({"Path": f"https://stepwisepicturebucket.s3.eu-central-1.amazonaws.com/{file.filename}"}), 200
     #endregion
     
     return app
