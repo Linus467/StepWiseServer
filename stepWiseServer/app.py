@@ -1194,7 +1194,7 @@ def create_app(test_config=None):
             conn.commit()
             return jsonify({"success": True}), 200
         except Exception as e:
-            return jsonify({"error": "Database error"}), 500
+            return jsonify({"error": f"Database error{e}"}), 500
         finally:
             cur.close()
             conn.close()
