@@ -1131,6 +1131,8 @@ def create_app(test_config=None):
 
         return jsonify({"success": True}), 200
 
+    
+
     @app.route("/api/DeleteMaterial", methods=["DELETE"])
     @require_isCreator_ofTutorial
     @require_auth
@@ -1161,6 +1163,44 @@ def create_app(test_config=None):
 
         return jsonify({"success": True}), 200
 
+
+    @app.route("/api/EditMaterial", methods=["PUT"])
+    @require_isCreator_ofTutorial
+    @require_auth
+    def edit_material():
+        data = request.json
+        tutorial_id = data.get('tutorial_id')
+        material_id = data.get('material_id')
+        title = data.get('title')
+        amount = data.get('amount')
+        price = data.get('price')
+        link = data.get('link')
+        id = data.get('id')
+
+        if not all([tutorial_id, material_id, title, amount, price, link, id]):
+            return jsonify({"error": "Missing required fields"}), 400
+
+        try:
+            conn = get_db_connection()
+            cur = conn.cursor()
+
+            # Update the material in the Material table
+            cur.execute("""
+                UPDATE Material
+                SET mat_title = %s, mat_amount = %s, mat_price = %s, link = %s
+                WHERE tutorial_id = %s AND material_id = %s
+            """, (title, amount, price, link, tutorial_id, material_id))
+            conn.commit()
+            return jsonify({"success": True}), 200
+        except Exception as e:
+            return jsonify({"error": "Database error"}), 500
+        finally:
+            cur.close()
+            conn.close()
+        
+
+
+
     #endregion
 
     #region tool
@@ -1175,6 +1215,7 @@ def create_app(test_config=None):
         amount = data.get('amount')
         link = data.get('link')
         price = data.get('price')
+        id = data.get('id')
 
         if not all([tutorial_id, title, amount, link]):
             return jsonify({"error": "Missing required fields"}), 400
@@ -1182,8 +1223,9 @@ def create_app(test_config=None):
         try:
             conn = get_db_connection()
             cur = conn.cursor()
-
             tool_id = uuid.uuid4()
+            if id != None:
+                tool_id = uuid.UUID(id)
             # Insert the new tool into the Tools table
             cur.execute("""
                 INSERT INTO Tools (tool_id, tutorial_id, tool_title, tool_amount, tool_price, link) 
@@ -1229,6 +1271,40 @@ def create_app(test_config=None):
 
         return jsonify({"success": True}), 200
     
+
+    @app.route("/api/EditTool", methods=["PUT"])
+    @require_isCreator_ofTutorial
+    @require_auth
+    def edit_tool():
+        data = request.json
+        tutorial_id = data.get('tutorial_id')
+        tool_id = data.get('tool_id')
+        title = data.get('title')
+        amount = data.get('amount')
+        link = data.get('link')
+        price = data.get('price')
+
+        if not all([tutorial_id, tool_id, title, amount, link, price]):
+            return jsonify({"error": "Missing required fields"}), 400
+
+        try:
+            conn = get_db_connection()
+            cur = conn.cursor()
+
+            # Update the tool in the Tools table
+            cur.execute("""
+                UPDATE Tools
+                SET tool_title = %s, tool_amount = %s, tool_price = %s, link = %s
+                WHERE tutorial_id = %s AND tool_id = %s
+            """, (title, amount, price, link, tutorial_id, tool_id))
+            conn.commit()
+            return jsonify({"success": True}), 200
+        except Exception as e:
+            return jsonify({"error": "Database error"}), 500
+        finally:
+            cur.close()
+            conn.close()
+
     #endregion
 
     #region searchLink
