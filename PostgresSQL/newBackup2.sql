@@ -295,9 +295,9 @@ ALTER TABLE public.watch_history OWNER TO postgres;
 --
 
 COPY public."User" (user_id, firstname, lastname, email, creator, password_hash, session_key) FROM stdin;
-123e4567-e89b-12d3-a456-426614174000	John	Doe	john@example.com	t	password123	\N
-223e4567-e89b-12d3-a456-426614174001	Jane	Smith	jane@example.com	f	password456	\N
-6fb660c3-c310-45c4-bf4a-b9532d917b1d	New	User	test@example.com	f	scrypt:32768:8:1$NpZJpXbKThmB62td$76983a754be5ed50b8de17498afafcc5e0eca9d8a070bb931d4ad69e788b1e9efa7b8052dfdb7f8e6506b2816a3d453953c73d3675b215ccad579972a4b0b4e0	\N
+123e4567-e89b-12d3-a456-426614174000	John	Doe	john@example.com	t	password123	e
+223e4567-e89b-12d3-a456-426614174001	Jane	Smith	jane@example.com	f	password456	e
+6fb660c3-c310-45c4-bf4a-b9532d917b1d	New	User	test@example.com	f	scrypt:32768:8:1$NpZJpXbKThmB62td$76983a754be5ed50b8de17498afafcc5e0eca9d8a070bb931d4ad69e788b1e9efa7b8052dfdb7f8e6506b2816a3d453953c73d3675b215ccad579972a4b0b4e0	e
 03275be5-9481-4895-ae9b-d1b7927d4812	New	User	newuser@example.com	t	scrypt:32768:8:1$H5mGnheIH8mDxxyq$96cc6f1333aa6cf2da419a3c2dc88f7f7c602a9be1d51aada2cb8ce87b71430d14b65d5013941355266b166a190cd8694d9bc70bd76cdb5ff493301cf062ffac	e9cec5fb-c537-4e25-8562-43b16ada3abf
 \.
 
