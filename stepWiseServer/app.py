@@ -1214,15 +1214,15 @@ def create_app(test_config=None):
     @require_auth
     def add_tool():
         data = request.json
-        tutorial_id = request.headers.get('tutorial_id')
+        tutorial_id = request.headers.get('tutorial-id')
         title = data.get('title')
         amount = data.get('amount')
         link = data.get('link')
         price = data.get('price')
         id = data.get('id')
 
-        if not all([tutorial_id, title, amount, link]):
-            return jsonify({"error": "Missing required fields"}), 400
+        if not all([tutorial_id, title, amount, link, price]):
+            return jsonify({"error": f"Missing required fields {title, amount, link, price}"}), 400
 
         try:
             conn = get_db_connection()
@@ -1250,8 +1250,8 @@ def create_app(test_config=None):
     @require_auth
     def delete_tool():
         data = request.json
-        tutorial_id = data.get('tutorial_id')
-        tool_id = data.get('tool_id')
+        tutorial_id = request.headers.get('tutorial-id')
+        tool_id = data.get('tool-id')
 
         if not all([tutorial_id, tool_id]):
             return jsonify({"error": "Missing required fields"}), 400
@@ -1281,8 +1281,8 @@ def create_app(test_config=None):
     @require_auth
     def edit_tool():
         data = request.json
-        tutorial_id = data.get('tutorial_id')
-        tool_id = data.get('tool_id')
+        tutorial_id = request.headers.get('tutorial-id')
+        tool_id = data.get('tool-id')
         title = data.get('title')
         amount = data.get('amount')
         link = data.get('link')
