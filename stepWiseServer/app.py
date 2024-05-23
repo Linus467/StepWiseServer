@@ -1407,7 +1407,7 @@ def create_app(test_config=None):
             except S3Error as e:
                 return jsonify({"error": str(e)}), 500
             
-        return jsonify({"Path" : f"http://localhost:4566/video/{file.name}"}), 200
+        return jsonify({"Path" : f"https://stepwisevideobucket.s3.amazonaws.com/{file.name}"}), 200
     
     @app.route("/api/PictureUpload", methods=["POST"])
     def upload_picture():
@@ -1434,7 +1434,7 @@ def create_app(test_config=None):
             except S3Error as e:
                 return jsonify({"error": str(e)}), 500
         
-        return jsonify({"Path": f"http://localhost:4566/picture/{file.filename}"}), 200
+        return jsonify({"Path": f"https://stepwisepicturebucket.s3.amazonaws.com/{file.filename}"}), 200
     #endregion
     
     return app
