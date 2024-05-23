@@ -1102,11 +1102,13 @@ def create_app(test_config=None):
     @require_auth
     def add_material():
         data = request.json
-        tutorial_id = data.get('TutorialId')
-        title = data.get('Title')
-        amount = data.get('Amount')
-        price = data.get('Price')
-        link = data.get('Link')
+        tutorial_id = request.headers.get('tutorial-id')
+        title = data.get('title')
+        amount = data.get('amount')
+        price = data.get('price')
+        link = data.get('link')
+        id = data.get('id')
+
 
         if not all([tutorial_id, title, amount, price, link]):
             return jsonify({"error": "Missing required fields"}), 400
@@ -1116,6 +1118,8 @@ def create_app(test_config=None):
             cur = conn.cursor()
 
             material_id = uuid.uuid4()
+            if id != None:
+                material_id = uuid.UUID(id)
             # Insert the new material into the Material table
             cur.execute("""
                 INSERT INTO Material (material_id, tutorial_id, mat_title, mat_amount, mat_price, link)
@@ -1210,7 +1214,7 @@ def create_app(test_config=None):
     @require_auth
     def add_tool():
         data = request.json
-        tutorial_id = data.get('tutorial_id')
+        tutorial_id = request.headers.get('tutorial_id')
         title = data.get('title')
         amount = data.get('amount')
         link = data.get('link')
