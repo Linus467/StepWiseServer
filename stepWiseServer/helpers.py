@@ -74,7 +74,7 @@ def fetch_and_format_steps(cur, tutorial_id):
 
     for step_record in step_records:
         cur.execute("""
-            SELECT ssl.sub_step_id, ss.content_type, ss.content_id
+            SELECT ssl.sub_step_id, ss.content_type, ss.content_id, ssl.sub_step_height
             FROM SubStepsList ssl
             INNER JOIN SubSteps ss ON ssl.sub_step_id = ss.sub_step_id
             WHERE ssl.step_id = %s
