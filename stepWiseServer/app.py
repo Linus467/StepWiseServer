@@ -1167,7 +1167,6 @@ def create_app(test_config=None):
 
         return jsonify({"success": True}), 200
 
-
     @app.route("/api/EditMaterial", methods=["PUT"])
     @require_isCreator_ofTutorial
     @require_auth
@@ -1392,7 +1391,7 @@ def create_app(test_config=None):
         file_uuid = str(uuid.uuid4())
         file.filename = f"{file_uuid}.mp4"
         if file:
-            bucket_name = 'video'
+            bucket_name = 'stepwisevideobucket'
             file_size = file.seek(0, os.SEEK_END)
             file.seek(0)
             try:
@@ -1422,7 +1421,7 @@ def create_app(test_config=None):
         file_uuid = str(uuid.uuid4())
         file.filename = f"{file_uuid}.jpg"
         if file:
-            bucket_name = 'picture'
+            bucket_name = 'stepwisepicturebucket'
             try:
                 s3.upload_fileobj(
                     file,
