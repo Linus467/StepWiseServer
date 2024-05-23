@@ -857,9 +857,6 @@ def create_app(test_config=None):
             conn = get_db_connection()
             cur = conn.cursor()
 
-            cur.execute("""Select 
-                        
-                        """,)
             # Fetch the content type
             cur.execute("""
                 SELECT content_type, sub_step_id FROM SubSteps st
