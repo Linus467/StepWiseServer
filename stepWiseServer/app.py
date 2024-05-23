@@ -1188,7 +1188,7 @@ def create_app(test_config=None):
             # Update the material in the Material table
             cur.execute("""
                 UPDATE Material
-                SET material_id = %s, mat_title = %s, mat_amount = %s, mat_price = %s, link = %s
+                SET mat_title = %s, mat_amount = %s, mat_price = %s, link = %s
                 WHERE tutorial_id = %s AND material_id = %s
             """, (title, amount, price, link, tutorial_id, material_id))
             conn.commit()
