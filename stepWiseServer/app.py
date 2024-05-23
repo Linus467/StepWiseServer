@@ -865,8 +865,8 @@ def create_app(test_config=None):
             data = cur.fetchone()
             content_type = data['content_type']
             sub_step_id = data['sub_step_id']
-            if not content_type:
-                return jsonify({"error": f"Content not found for contentid:{content_id}"}), 404
+            if not all([content_type, data, sub_step_id]):
+                return jsonify({"error": f"Content not found for contentid:{content_id, data, sub_step_id}"}), 404
 
             # Dynamically select table based on content_type
             if content_type == 1:
