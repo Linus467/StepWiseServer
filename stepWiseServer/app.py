@@ -1139,8 +1139,8 @@ def create_app(test_config=None):
     @require_auth
     def delete_material():
         data = request.json
-        tutorial_id = data.get('tutorial_id')
-        material_id = data.get('material_id')
+        tutorial_id = request.headers.get('tutorial-id')
+        material_id = data.get('material-id')
 
         if not all([tutorial_id, material_id]):
             return jsonify({"error": "Missing required fields"}), 400
