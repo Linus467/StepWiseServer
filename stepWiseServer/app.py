@@ -1179,19 +1179,17 @@ def create_app(test_config=None):
         amount = data.get('amount')
         price = data.get('price')
         link = data.get('link')
-        id = data.get('id')
 
-        if not all([tutorial_id, material_id, title, amount, price, link, id]):
-            return jsonify({"error": "Missing required fields"}), 400
+        if not all([tutorial_id, material_id, title, amount, price, link]):
+            return jsonify({"error": f"Missing required fields"}), 400
 
         try:
             conn = get_db_connection()
             cur = conn.cursor()
-
             # Update the material in the Material table
             cur.execute("""
                 UPDATE Material
-                SET mat_title = %s, mat_amount = %s, mat_price = %s, link = %s
+                SET material_id = %s, mat_title = %s, mat_amount = %s, mat_price = %s, link = %s
                 WHERE tutorial_id = %s AND material_id = %s
             """, (title, amount, price, link, tutorial_id, material_id))
             conn.commit()
