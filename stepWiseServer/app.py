@@ -1173,8 +1173,8 @@ def create_app(test_config=None):
     @require_auth
     def edit_material():
         data = request.json
-        tutorial_id = data.get('tutorial_id')
-        material_id = data.get('material_id')
+        tutorial_id = data.get('tutorial-id')
+        material_id = data.get('material-id')
         title = data.get('title')
         amount = data.get('amount')
         price = data.get('price')
@@ -1289,7 +1289,7 @@ def create_app(test_config=None):
         price = data.get('price')
 
         if not all([tutorial_id, tool_id, title, amount, link, price]):
-            return jsonify({"error": "Missing required fields"}), 400
+            return jsonify({"error": f"Missing required fields {price, t}"}), 400
 
         try:
             conn = get_db_connection()
