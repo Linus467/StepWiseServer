@@ -1051,9 +1051,9 @@ def create_app(test_config=None):
             conn = get_db_connection()
             cur = conn.cursor()
             query = f"UPDATE public.Tutorials SET {set_clause} WHERE tutorial_id = %s;"
-            return jsonify({"error": f"Query: {query}, Parameters: {parameters}"}), 400
+            #return jsonify({"error": f"Query: {query}, Parameters: {parameters}"}), 400
             cur.execute(query, parameters)
-            conn.commit
+            conn.commit()
             if cur.rowcount == 0:
                 return jsonify({"error": "No tutorial found with the provided ID"}), 404
         except Exception as e:
