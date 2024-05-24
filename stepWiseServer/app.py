@@ -1050,17 +1050,18 @@ def create_app(test_config=None):
         try:
             conn = get_db_connection()
             cur = conn.cursor()
-            query = f"""UPDATE public.Tutorials SET {set_clause} WHERE tutorial_id = %s;"""
+            query = f"UPDATE public.Tutorials SET {set_clause} WHERE tutorial_id = %s;"
             cur.execute(query, parameters)
             conn.commit
             if cur.rowcount == 0:
                 return jsonify({"error": "No tutorial found with the provided ID"}), 404
-            return jsonify({"success": True}), 200
         except Exception as e:
             return jsonify({"error": f"Database error: {e}"}), 500
         finally:
             cur.close()
             conn.close()
+        
+        return jsonify({"success": True}), 200
 
     @app.route("/api/DeleteTutorial", methods=["DELETE"])
     @require_isCreator_ofTutorial
