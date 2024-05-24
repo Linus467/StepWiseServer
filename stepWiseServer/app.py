@@ -856,11 +856,10 @@ def create_app(test_config=None):
         try:
             conn = get_db_connection()
             cur = conn.cursor()
-            return jsonify({"error": f"Content not found for contentid:{content_id.lower()}"}), 404
             # Fetch the content type
             cur.execute("""
                 SELECT content_type, sub_step_id FROM public.SubSteps
-                WHERE content_id = %s
+                WHERE sub_step_id = %s
             """,  (content_id.lower(),))
             data = cur.fetchone()
             content_type = data['content_type']
