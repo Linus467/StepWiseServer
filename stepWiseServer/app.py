@@ -849,7 +849,7 @@ def create_app(test_config=None):
         tutorial_id = request.headers.get('tutorial-id')
         step_id = request.headers.get('step-id')
         content_id = request.headers.get('content-id')
-        return jsonify({"error": f"tutorial_id: {tutorial_id}, step_id: {step_id}, content_id: {content_id}"}), 400
+
         if not all([tutorial_id, step_id, content_id]):
             return jsonify({"error": "Missing required fields"}), 400
 
@@ -865,6 +865,7 @@ def create_app(test_config=None):
             data = cur.fetchone()
             content_type = data['content_type']
             sub_step_id = data['sub_step_id']
+            return jsonify({"error": f"Content not found for contentid:{content_id, data, sub_step_id}"}), 404
             if not all([content_type, data, sub_step_id]):
                 return jsonify({"error": f"Content not found for contentid:{content_id, data, sub_step_id}"}), 404
 
