@@ -884,16 +884,17 @@ def create_app(test_config=None):
             conn.commit()
 
             cur.execute("""
-                DELETE FROM SubSteps
+                DELETE FROM SubStepsList
                 WHERE sub_step_id = %s
             """, (sub_step_id,))
             conn.commit()
 
             cur.execute("""
-                DELETE FROM SubStepsList
+                DELETE FROM SubSteps
                 WHERE sub_step_id = %s
             """, (sub_step_id,))
             conn.commit()
+
 
         except Exception as e:
             return jsonify({"error": f"Database error {e}"}), 500
