@@ -1009,7 +1009,7 @@ def create_app(test_config=None):
                         preview_picture_link, preview_type, views, steps)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 0, 0)
             """, (str(tutorial_id), title, tutorial_kind, str(user_id),
-                time, difficulty, False, description, "", 1))
+                time, difficulty, False, description, ' ', 1))
             conn.commit()
             return jsonify({"success": True, "tutorial_id": str(tutorial_id)}), 200
 
