@@ -878,6 +878,7 @@ def create_app(test_config=None):
             else:
                 return jsonify({"error": f"Invalid content type content_type: {content_type}"}), 400
 
+            return jsonify({"error": f"Table name: {table_name,content_id, sub_step_id}"}), 400
             # Delete the content from the selected table
             cur.execute("""
                 DELETE FROM %s
