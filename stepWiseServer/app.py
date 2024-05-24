@@ -891,7 +891,7 @@ def create_app(test_config=None):
 
             cur.execute("""
                 DELETE FROM SubStepsList
-                WHERE id = %s
+                WHERE sub_step_id = %s
             """, (sub_step_id,))
             conn.commit()
 
