@@ -994,8 +994,8 @@ def create_app(test_config=None):
         preview_picture_link = data.get('previewPictureLink')
         preview_type = data.get('previewType')
 
-        if not all([user_id, title, tutorial_kind, time, difficulty, description, preview_picture_link, preview_type]):
-            return jsonify({"error": "Missing required fields"}), 400
+        if not all([user_id, title, tutorial_kind, time, difficulty, description]):
+            return jsonify({"error": f"Missing required fields{e}"}), 400
 
         try:
             conn = get_db_connection()
@@ -1009,7 +1009,7 @@ def create_app(test_config=None):
                         preview_picture_link, preview_type, views, steps)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 0, 0)
             """, (str(tutorial_id), title, tutorial_kind, str(user_id),
-                time, difficulty, False, description, preview_picture_link, preview_type))
+                time, difficulty, False, description, "", 1))
             conn.commit()
             return jsonify({"success": True, "tutorial_id": str(tutorial_id)}), 200
 
