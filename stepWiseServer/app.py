@@ -849,7 +849,7 @@ def create_app(test_config=None):
         tutorial_id = request.headers.get('tutorial-id')
         step_id = request.headers.get('step-id')
         content_id = request.headers.get('content-id')
-
+        return jsonify({"error": f"tutorial_id: {tutorial_id}, step_id: {step_id}, content_id: {content_id}"}), 400
         if not all([tutorial_id, step_id, content_id]):
             return jsonify({"error": "Missing required fields"}), 400
 
@@ -878,7 +878,7 @@ def create_app(test_config=None):
             else:
                 return jsonify({"error": f"Invalid content type content_type: {content_type}"}), 400
 
-            return jsonify({"error": f"Table name: {table_name,content_id, sub_step_id}"}), 400
+
             # Delete the content from the selected table
             cur.execute("""
                 DELETE FROM %s
