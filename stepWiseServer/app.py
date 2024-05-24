@@ -879,10 +879,8 @@ def create_app(test_config=None):
 
 
             # Delete the content from the selected table
-            cur.execute("""
-                DELETE FROM %s
-                WHERE id = %s
-            """, (table_name,content_id,))
+            delete_query = f"DELETE FROM {table_name} WHERE id = %s"
+            cur.execute(delete_query, (content_id.lower(),))
             conn.commit()
 
             cur.execute("""
