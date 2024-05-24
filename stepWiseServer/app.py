@@ -859,13 +859,12 @@ def create_app(test_config=None):
 
             # Fetch the content type
             cur.execute("""
-                SELECT content_type, sub_step_id FROM SubSteps st
-                WHERE st.content_id = %s
+                SELECT content_type, sub_step_id FROM public.SubSteps
+                WHERE content_id = %s
             """,  (content_id,))
             data = cur.fetchone()
             content_type = data['content_type']
             sub_step_id = data['sub_step_id']
-            return jsonify({"error": f"Content not found for contentid:{content_id, data, sub_step_id}"}), 404
             if not all([content_type, data, sub_step_id]):
                 return jsonify({"error": f"Content not found for contentid:{content_id, data, sub_step_id}"}), 404
 
