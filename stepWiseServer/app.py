@@ -861,7 +861,7 @@ def create_app(test_config=None):
             cur.execute("""
                 SELECT content_type, sub_step_id FROM public.SubSteps
                 WHERE content_id = %s
-            """,  (content_id,))
+            """,  (content_id.lower(),))
             data = cur.fetchone()
             content_type = data['content_type']
             sub_step_id = data['sub_step_id']
