@@ -689,6 +689,77 @@ def create_app(test_config=None):
 
         return jsonify({"success": success}), 200 if success else 404
     
+    @app.route("/api/GetFavoriteList", methods=["GET"])
+    @require_auth
+    def get_favorite_list():
+        user_id = request.headers.get('user-id')
+        session_key = request.headers.get('session-key')
+        tutorials_data_result = []
+        
+        try:
+            conn = get_db_connection()
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT
+                    t.tutorial_id,
+                    t.title,
+                    t.tutorial_kind,
+                    u.user_id,
+                    u.firstname,
+                    u.lastname,
+                    u.email,
+                    u.creator,
+                    t.time,
+                    t.difficulty,
+                    t.complete,
+                    t.description,
+                    t.preview_picture_link,
+                    t.preview_type,
+                    t.views,
+                    t.steps
+                FROM Tutorials t
+                INNER JOIN "User" u ON t.user_id = u.user_id
+                INNER JOIN FavouriteList wh ON wh.user_id = %s
+            """, (user_id,))
+
+            tutorials_data = cur.fetchall()
+
+            if(tutorials_data[0] == None):
+                return jsonify({"Empty": "Empty"}), 201
+            tutorials_data_result = []
+            for tutorial_data in tutorials_data:
+                # For each tutorial, fetch additional data like materials, tools, steps, and ratings
+                tutorial_id = tutorial_data['tutorial_id']
+                materials = fetch_and_format_materials(cur, tutorial_id)
+                tools = fetch_and_format_tools(cur, tutorial_id)
+                steps = fetch_and_format_steps(cur, tutorial_id)
+                ratings = fetch_and_format_ratings(cur, tutorial_id)
+                user = fetch_and_format_user(cur,user_id)
+                # Add the fetched data to the tutorial_data dictionary
+                tutorials_data_result.append({
+                    "id": tutorial_data["tutorial_id"],
+                    "title": tutorial_data["title"],
+                    "tutorialKind": tutorial_data["tutorial_kind"],
+                    "user": user,
+                    "time": tutorial_data["time"],
+                    "difficulty": tutorial_data["difficulty"],
+                    "completed": tutorial_data["complete"],
+                    "descriptionText": tutorial_data["description"],
+                    "previewPictureLink": tutorial_data["preview_picture_link"],
+                    "previewType": tutorial_data["preview_type"],
+                    "views": tutorial_data["views"],
+                    "steps": steps,
+                    "materials": materials,
+                    "tools": tools,
+                    "ratings": ratings
+                    })
+
+            cur.close()
+            conn.close()
+        except Exception as e:
+            return jsonify({"error": f"Database error: {e}"}), 500
+        return jsonify(tutorials_data_result), 200
+
     #endregion
 
     #region Browser
@@ -1196,9 +1267,6 @@ def create_app(test_config=None):
         finally:
             cur.close()
             conn.close()
-        
-
-
 
     #endregion
 
