@@ -103,6 +103,7 @@ def fetch_and_format_steps(cur, tutorial_id):
             adjusted_sub_steps.append({
                 "id": sub_step['sub_step_id'],
                 "type": sub_step['content_type'],
+                "height": sub_step['sub_step_height'],
                 "content": content
             })
 
