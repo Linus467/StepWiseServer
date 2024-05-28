@@ -689,7 +689,7 @@ def create_app(test_config=None):
 
         return jsonify({"success": success}), 200 if success else 404
     
-    @app.route("/api/CheckFavorite", methods=["GET"])
+    @app.route("/api/getCheckFavorite", methods=["GET"])
     @require_auth
     def check_favorite():
         user_id = request.headers.get('user-id')
