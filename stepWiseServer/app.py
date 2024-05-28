@@ -689,6 +689,33 @@ def create_app(test_config=None):
 
         return jsonify({"success": success}), 200 if success else 404
     
+    @app.route("/api/CheckFavorite", methods=["GET"])
+    @require_auth
+    def check_favorite():
+        user_id = request.headers.get('user-id')
+        tutorial_id = request.headers.get('tutorial-id')
+
+        if not tutorial_id:
+            return jsonify({"error": "Missing tutorial_id parameter"}), 400
+
+        conn = get_db_connection()
+        cur = conn.cursor()
+        try:
+            cur.execute("""
+                SELECT 1
+                FROM FavouriteList
+                WHERE user_id = %s AND tutorial_id = %s
+            """, (user_id, tutorial_id))
+            is_favorite = cur.fetchone() is not None
+        except Exception as e:
+            return jsonify({"error": "Database error", "details": str(e)}), 500
+        finally:
+            cur.close()
+            conn.close()
+
+        return jsonify({"isFavorite": is_favorite}), 200
+
+
     @app.route("/api/GetFavoriteList", methods=["GET"])
     @require_auth
     def get_favorite_list():
