@@ -1003,8 +1003,6 @@ def create_app(test_config=None):
         return jsonify({"success": True}), 200
 
     @app.route("/api/update_substep_order", methods=["POST"])
-    @require_auth
-    @require_isCreator_ofTutorial
     def update_substep_order():
         data = request.json
         tutorial_id = data.get('tutorial_id')
@@ -1013,23 +1011,28 @@ def create_app(test_config=None):
 
         if not all([tutorial_id, step_id, substeps]):
             return jsonify({"error": "Missing required fields"}), 400
-        return jsonify({"fields": [tutorial_id, step_id, substeps]}), 200
+
         try:
             conn = get_db_connection()
             cur = conn.cursor()
 
-            for index, substep_id in enumerate(substeps):
-                new_height = index + 1 
+            for substep in substeps:
+                substep_id = substep.get('id')
+                substep_type = substep.get('type')
+                substep_height = substep.get('height')
+
                 cur.execute("""
                     UPDATE SubStepsList
-                    SET sub_step_height = %s
+                    SET sub_step_type = %s, sub_step_height = %s
                     WHERE sub_step_id = %s AND step_id = %s
-                """, (new_height, substep_id, step_id))
+                """, (substep_type, substep_height, substep_id, step_id))
             
             conn.commit()
 
         except Exception as e:
+            conn.rollback()  # Ensure rollback on error
             return jsonify({"error": f"Database error: {e}"}), 500
+
         finally:
             cur.close()
             conn.close()
