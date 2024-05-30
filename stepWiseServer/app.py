@@ -1013,7 +1013,7 @@ def create_app(test_config=None):
 
         if not all([tutorial_id, step_id, substeps]):
             return jsonify({"error": "Missing required fields"}), 400
-
+        return jsonify({"fields": [tutorial_id, step_id, substeps]}), 200
         try:
             conn = get_db_connection()
             cur = conn.cursor()
