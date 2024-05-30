@@ -1018,14 +1018,13 @@ def create_app(test_config=None):
 
             for substep in substeps:
                 substep_id = substep.get('id')
-                substep_type = substep.get('type')
                 substep_height = substep.get('height')
 
                 cur.execute("""
-                    UPDATE SubStepsList
-                    SET sub_step_type = %s, sub_step_height = %s
+                    UPDATE substepslist
+                    SET sub_step_height = %s
                     WHERE sub_step_id = %s AND step_id = %s
-                """, (substep_type, substep_height, substep_id, step_id))
+                """, (substep_height, substep_id, step_id))
             
             conn.commit()
 
