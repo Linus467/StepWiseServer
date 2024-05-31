@@ -621,8 +621,8 @@ def create_app(test_config=None):
                     t.complete
                 FROM Tutorials t
                 JOIN "User" u ON t.user_id = u.user_id
-                WHERE t.title ILIKE (%s) OR t.description ILIKE (%s)
-            """, (search_query, search_query))
+                WHERE t.title ILIKE (%s) OR t.description ILIKE (%s) OR t.tutorial_kind ILIKE (%s)
+            """, (search_query, search_query, search_query))
             tutorials_output = fetch_and_format_tutorials(cur, cur.fetchall())
 
             if not tutorials_output:
@@ -746,7 +746,9 @@ def create_app(test_config=None):
                     t.steps
                 FROM Tutorials t
                 INNER JOIN "User" u ON t.user_id = u.user_id
-                INNER JOIN FavouriteList wh ON wh.user_id = %s
+                INNER JOIN FavouriteList f 
+                    ON f.tutorial_id = t.tutorial_id 
+                        AND f.user_id = %s
             """, (user_id,))
 
             tutorials_data = cur.fetchall()
