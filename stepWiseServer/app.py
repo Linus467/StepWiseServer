@@ -696,7 +696,7 @@ def create_app(test_config=None):
             FROM FavouriteList
             WHERE user_id = %s AND tutorial_id = %s
         """, (user_id, tutorial_id))
-        success = cur.fetchone() is not None
+        success = cur.fetchone() is None
 
         cur.close()
         conn.close()
