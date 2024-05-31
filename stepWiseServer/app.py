@@ -690,11 +690,13 @@ def create_app(test_config=None):
             WHERE user_id = %s AND tutorial_id = %s
         """, (user_id, tutorial_id))
         conn.commit()
-
-        if cur.rowcount:
-            success = True
-        else:
-            success = False
+        
+        cur.execute("""
+            SELECT 1
+            FROM FavouriteList
+            WHERE user_id = %s AND tutorial_id = %s
+        """, (user_id, tutorial_id))
+        success = cur.fetchone() is not None
 
         cur.close()
         conn.close()
