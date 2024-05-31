@@ -647,17 +647,29 @@ def create_app(test_config=None):
 
         if not all([user_id, tutorial_id]):
             return jsonify({"error": "Missing required parameters"}), 400
+        try:
+            conn = get_db_connection()
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT 1
+                FROM FavouriteList
+                WHERE user_id = %s AND tutorial_id = %s
+            """, (user_id, tutorial_id))
+            if cur.fetchone():
+                cur.close()
+                conn.close()
+                return jsonify({"error": "Tutorial already favorited"}), 409
 
-        conn = get_db_connection()
-        cur = conn.cursor()
-        cur.execute("""
-            INSERT INTO FavouriteList (user_id, tutorial_id)
-            VALUES (%s, %s)
-        """, (user_id, tutorial_id))
-        conn.commit()
-
-        cur.close()
-        conn.close()
+            cur.execute("""
+                INSERT INTO FavouriteList (user_id, tutorial_id)
+                VALUES (%s, %s)
+            """, (user_id, tutorial_id))
+            conn.commit()
+        except Exception as e:
+            return jsonify({"error": f"Database error: {e}"}), 500
+        finally:
+            cur.close()
+            conn.close()
 
         return jsonify({"success": True}), 200
 
