@@ -69,17 +69,26 @@ def create_app(test_config=None):
     def require_auth(f):
         @wraps(f)
         def decorated_function(*args, **kwargs):
+            # Print request headers for debugging purposes
             print("Request Headers:")
             for header, value in request.headers.items():
                 print(f"{header}: {value}")
+            
+            # Get user_id and session_key from request headers
             user_id = request.headers.get('user-id')
             session_key = request.headers.get('session-key')
+            
+            # Check if user_id and session_key are present and authenticate the user
             if not user_id or not session_key or not authenticate(user_id, session_key):
+                # Return error response if authentication fails
                 if test_config:
                     error_message = f"Authentication with Session Key failed: {user_id}, {session_key}"
                     return jsonify({"error": error_message}), 401
                 return jsonify({"error": "Authentication with Session Key failed"}), 401
+            
+            # Call the decorated function if authentication is successful
             return f(*args, **kwargs)
+        
         return decorated_function
 
     def require_isCreator(f):
@@ -603,22 +612,7 @@ def create_app(test_config=None):
         try:
             cur.execute("""
                 SELECT
-                    t.tutorial_id,
-                    t.title,
-                    t.tutorial_kind,
-                    t.description,
-                    t.preview_picture_link,
-                    t.preview_type,
-                    t.views,
-                    t.steps,
-                    u.user_id,
-                    u.firstname,
-                    u.lastname,
-                    u.email,
-                    u.creator,
-                    t.time,
-                    t.difficulty,
-                    t.complete
+                    t.tutorial_id
                 FROM Tutorials t
                 JOIN "User" u ON t.user_id = u.user_id
                 WHERE t.title ILIKE (%s) OR t.description ILIKE (%s) OR t.tutorial_kind ILIKE (%s)
@@ -1019,6 +1013,8 @@ def create_app(test_config=None):
         return jsonify({"success": True}), 200
 
     @app.route("/api/update_substep_order", methods=["POST"])
+    @require_auth
+    @require_isCreator_ofTutorial
     def update_substep_order():
         data = request.json
         tutorial_id = data.get('tutorial_id')
@@ -1250,6 +1246,7 @@ def create_app(test_config=None):
     @require_isCreator_ofTutorial
     @require_auth
     def add_material():
+
         data = request.json
         tutorial_id = request.headers.get('tutorial-id')
         title = data.get('title')
@@ -1283,9 +1280,6 @@ def create_app(test_config=None):
             conn.close()
 
         return jsonify({"success": True}), 200
-
-    
-
     @app.route("/api/DeleteMaterial", methods=["DELETE"])
     @require_isCreator_ofTutorial
     @require_auth
@@ -1522,7 +1516,6 @@ def create_app(test_config=None):
     #endregion
 
     #region BucketUpload
-
     @app.route("/api/VideoUpload", methods=["POST"])
     #@require_auth
     #@require_isCreator
