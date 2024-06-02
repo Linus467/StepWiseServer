@@ -612,7 +612,22 @@ def create_app(test_config=None):
         try:
             cur.execute("""
                 SELECT
-                    t.tutorial_id
+                    t.tutorial_id,
+                    t.title,
+                    t.tutorial_kind,
+                    t.description,
+                    t.preview_picture_link,
+                    t.preview_type,
+                    t.views,
+                    t.steps,
+                    u.user_id,
+                    u.firstname,
+                    u.lastname,
+                    u.email,
+                    u.creator,
+                    t.time,
+                    t.difficulty,
+                    t.complete
                 FROM Tutorials t
                 JOIN "User" u ON t.user_id = u.user_id
                 WHERE t.title ILIKE (%s) OR t.description ILIKE (%s) OR t.tutorial_kind ILIKE (%s)
