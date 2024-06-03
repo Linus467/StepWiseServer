@@ -509,7 +509,7 @@ def create_app(test_config=None):
                     t.steps
                 FROM Tutorials t
                 INNER JOIN "User" u ON t.user_id = u.user_id
-                INNER JOIN Watch_History wh ON wh.user_id = %s
+                INNER JOIN Watch_History wh ON t.tutorial_id = wh.tutorial_id AND wh.user_id = %s
             """, (user_id,))
 
             tutorials_data = cur.fetchall()
@@ -594,7 +594,6 @@ def create_app(test_config=None):
         conn.close()
         return jsonify({"success": True}), 200
     
-
     @app.route("/api/AddHistory", methods=["POST"])
     @require_auth
     def add_history():
