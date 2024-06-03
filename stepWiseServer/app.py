@@ -594,6 +594,34 @@ def create_app(test_config=None):
         conn.close()
         return jsonify({"success": True}), 200
     
+
+    @app.route("/api/AddHistory", methods=["POST"])
+    @require_auth
+    def add_history():
+        # Get the user_id from require auth decorator
+        user_id = request.headers.get('user-id')
+        tutorial_id = request.headers.get('tutorial-id')
+        if not tutorial_id:
+            return jsonify({"error": "Missing required parameters"}), 400
+
+        # DB connection
+        conn = get_db_connection()
+        cur = conn.cursor()
+        # Add the tutorial to the user's watch history
+        try:
+            cur.execute("""
+                INSERT INTO Watch_History (user_id, tutorial_id,last_watched_time,completed_steps)
+                VALUES (%s, %s, CURRENT_TIMESTAMP, 0)
+            """, (user_id, tutorial_id))
+            conn.commit()
+            cur.close()
+            conn.close()
+        except Exception as e:
+            return jsonify({"error": f"Database error: {e}"}), 500
+        
+        return jsonify({"success": True}), 200
+
+    
     #endregion
 
     #region Search
